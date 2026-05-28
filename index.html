@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LINE ID 取得 - 優光書道教室</title>
+  <style>
+    :root { --navy:#1a2940; --blue:#2563eb; --bg:#f7f5f1; --card:#fff; --text:#1f2937; --muted:#6b7280; }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px;}
+    .header{width:100%;max-width:480px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;border-radius:14px;padding:18px 20px;text-align:center;margin-bottom:18px;}
+    .header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:0.5px;}
+    .header p{margin:4px 0 0;font-size:12px;opacity:0.85;}
+    .card{width:100%;max-width:480px;background:var(--card);border-radius:14px;padding:24px 20px;box-shadow:0 2px 12px rgba(0,0,0,0.05);}
+    h2{margin:0 0 8px;font-size:16px;color:var(--navy);}
+    p.lead{margin:0 0 16px;color:var(--muted);font-size:13px;line-height:1.6;}
+    .status{padding:14px 16px;background:#f3f4f6;border-radius:10px;color:var(--muted);font-size:13px;text-align:center;}
+    .id-input{width:100%;padding:14px;font-size:14px;border:2px solid #e5e7eb;border-radius:10px;background:#f9fafb;color:var(--text);text-align:center;letter-spacing:0.3px;}
+    .btn{width:100%;margin-top:14px;padding:14px;font-size:15px;font-weight:600;color:#fff;background:var(--blue);border:none;border-radius:10px;cursor:pointer;}
+    .btn:active{opacity:0.9;}
+    .hint{margin-top:14px;font-size:12px;color:var(--muted);text-align:center;line-height:1.6;}
+    .error{color:#b91c1c;background:#fee2e2;border-radius:10px;padding:14px;font-size:13px;line-height:1.6;}
+    .hidden{display:none;}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>優光書道教室</h1>
+    <p>LINE ID 取得ページ</p>
+  </div>
+
+  <div class="card">
+    <div id="loading" class="status">準備中…</div>
+
+    <div id="result" class="hidden">
+      <h2>あなたのLINE ID</h2>
+      <p class="lead">下の値をタップして全選択→コピーし、設定シートの「先生のLINE ID」(B7) に貼り付けてください。</p>
+      <input id="idValue" class="id-input" type="text" readonly onclick="this.select();">
+      <button class="btn" id="copyBtn" onclick="doCopy()">コピーする</button>
+      <p class="hint">コピーできたら、この画面は閉じて大丈夫です。</p>
+    </div>
+
+    <div id="errorBox" class="hidden">
+      <h2 style="color:#b91c1c;">エラー</h2>
+      <div class="error" id="errorMsg"></div>
+    </div>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    var LIFF_ID = '2010125456-yyTmXEyt';
+    var $ = function(id){ return document.getElementById(id); };
+    function setStatus(s){ $('loading').textContent = s; }
+    function showError(msg){
+      $('loading').classList.add('hidden');
+      $('result').classList.add('hidden');
+      $('errorMsg').textContent = msg;
+      $('errorBox').classList.remove('hidden');
+    }
+    function showId(uid){
+      $('loading').classList.add('hidden');
+      $('errorBox').classList.add('hidden');
+      $('idValue').value = uid;
+      $('result').classList.remove('hidden');
+    }
+    function doCopy(){
+      var inp = $('idValue');
+      inp.focus(); inp.select(); inp.setSelectionRange(0, 99999);
+      var done = function(){ $('copyBtn').textContent = 'コピーしました！'; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(inp.value).then(done).catch(function(){
+          try { if (document.execCommand('copy')) done(); } catch(e){}
+        });
+      } else {
+        try { if (document.execCommand('copy')) done(); } catch(e){}
+      }
+    }
+
+    setStatus('① LIFF初期化中…');
+    if (typeof liff === 'undefined') {
+      showError('LIFF SDK が読み込めませんでした。電波・通信環境を確認のうえ、もう一度開いてください。');
+    } else {
+      liff.init({ liffId: LIFF_ID }).then(function(){
+        setStatus('② プロフィール取得中…');
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        return liff.getProfile();
+      }).then(function(profile){
+        if (profile && profile.userId) { showId(profile.userId); }
+      }).catch(function(err){
+        showError('LIFF処理でエラー：' + (err && err.message ? err.message : String(err)));
+      });
+    }
+  </script>
+</body>
+</html>
