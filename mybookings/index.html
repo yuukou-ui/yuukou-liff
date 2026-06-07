@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>あなたの振替予約 - 優光書道教室</title>
+  <style>
+    :root { --navy:#1a2940; --blue:#2563eb; --bg:#f7f5f1; --card:#fff; --text:#1f2937; --muted:#6b7280; --orange:#ea580c; --purple:#7c3aed; --green:#16a34a; }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px 14px;}
+    .wrap{max-width:480px;margin:0 auto;}
+    .header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;border-radius:14px;padding:18px 20px;text-align:center;margin-bottom:16px;}
+    .header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:0.5px;}
+    .header p{margin:4px 0 0;font-size:12px;opacity:0.85;}
+    .status{padding:14px 16px;background:#f3f4f6;border-radius:10px;color:var(--muted);font-size:13px;text-align:center;}
+    .student-block{margin-bottom:18px;}
+    .student-name{font-size:15px;font-weight:600;color:var(--navy);margin:0 0 10px;padding-left:2px;}
+    .booking-card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:0 2px 10px rgba(0,0,0,0.05);margin-bottom:10px;border-left:4px solid var(--orange);}
+    .booking-card.free{border-left-color:var(--purple);}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .seg .label{font-size:11px;color:var(--muted);margin-bottom:2px;}
+    .seg .date{font-size:15px;font-weight:600;color:var(--text);}
+    .seg .time{font-size:12px;color:var(--muted);}
+    .arrow{font-size:18px;color:#c7bfb6;}
+    .tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;margin-bottom:8px;}
+    .tag.makeup{background:#fff4ed;color:var(--orange);}
+    .tag.free{background:#f3edff;color:var(--purple);}
+    .empty{background:var(--card);border-radius:12px;padding:28px 16px;text-align:center;color:var(--muted);box-shadow:0 2px 10px rgba(0,0,0,0.05);}
+    .empty .t{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;}
+    .error{color:#b91c1c;background:#fee2e2;border-radius:10px;padding:14px;font-size:13px;line-height:1.6;}
+    .hidden{display:none;}
+    .dbg{margin-top:14px;font-size:11px;color:#9ca3af;text-align:center;word-break:break-all;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1>あなたの振替予約</h1>
+      <p>優光書道教室</p>
+    </div>
+
+    <div id="loading" class="status">準備中…</div>
+    <div id="list"></div>
+    <div id="errorBox" class="hidden"><div class="error" id="errorMsg"></div></div>
+    <div id="dbg" class="dbg"></div>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    // ===== 設定 =====
+    var LIFF_ID  = '2010125456-yyTmXEyt';
+    // ↓↓↓ Apps Script の「ウェブアプリ」デプロイURL（/exec で終わるもの）を貼り付けてください ↓↓↓
+    var API_URL  = 'https://script.google.com/macros/s/AKfycbw-1ZUiuk6qBt_jogC3U05rOKocr72cimpkn3MDzPq8Mhm7zYj70-LqbD_dqWGtuIeR/exec';
+    // ===============
+
+    var $ = function(id){ return document.getElementById(id); };
+    function setStatus(s){ var el=$('loading'); if(el) el.textContent = s; }
+    function dbg(s){ $('dbg').textContent = s; }   // LINE内ブラウザはconsole非可視のため画面に出す
+    function showError(msg){
+      $('loading').classList.add('hidden');
+      $('list').innerHTML = '';
+      $('errorMsg').textContent = msg;
+      $('errorBox').classList.remove('hidden');
+    }
+
+    // simple request（POST + text/plain）で Apps Script を叩く。プリフライト回避。
+    function callApi(action, accessToken){
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: action, accessToken: accessToken })
+      }).then(function(r){ return r.json(); });
+    }
+
+    function fmtDate(s){
+      if(!s) return '';
+      var p = String(s).split('-'); // 'yyyy-MM-dd' or 'yyyy/MM/dd'
+      if(p.length < 3){ p = String(s).split('/'); }
+      if(p.length < 3) return s;
+      var dow = ['日','月','火','水','木','金','土'];
+      var d = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+      return Number(p[1]) + '/' + Number(p[2]) + '（' + dow[d.getDay()] + '）';
+    }
+
+    function render(students){
+      var html = '';
+      var hasAny = false;
+      for (var s = 0; s < students.length; s++){
+        var st = students[s];
+        var future = (st.bookings || []).filter(function(b){
+          var d = b.newDate; if(!d) return false;
+          var p = d.indexOf('-')>=0 ? d.split('-') : d.split('/');
+          var dt = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]), 23, 59);
+          return dt.getTime() >= Date.now() - 86400000; // 当日以降
+        });
+        html += '<div class="student-block">';
+        html += '<p class="student-name">' + (st.name || '') + ' さん</p>';
+        if (future.length === 0){
+          html += '<div class="empty"><div class="t">これからの振替予約はありません</div>'
+                + '<div>お休みの予定がある時は予約してください</div></div>';
+        } else {
+          hasAny = true;
+          for (var i = 0; i < future.length; i++){
+            var b = future[i];
+            var isFree = (b.bookingType === 'free');
+            html += '<div class="booking-card' + (isFree ? ' free' : '') + '">';
+            html += isFree ? '<span class="tag free">🎨 フリー予約</span>'
+                           : '<span class="tag makeup">🔁 振替</span>';
+            html += '<div class="row">';
+            if (!isFree){
+              html += '<div class="seg"><div class="label">お休み</div>'
+                    + '<div class="date">' + fmtDate(b.absentDate) + '</div>'
+                    + '<div class="time">' + (b.absentTime||'') + '</div></div>';
+              html += '<div class="arrow">→</div>';
+            }
+            html += '<div class="seg"><div class="label">' + (isFree?'お稽古日':'振替先') + '</div>'
+                  + '<div class="date">' + fmtDate(b.newDate) + '</div>'
+                  + '<div class="time">' + (b.newTime||'') + '</div></div>';
+            html += '</div></div>';
+          }
+        }
+        html += '</div>';
+      }
+      $('loading').classList.add('hidden');
+      $('list').innerHTML = html;
+    }
+
+    // ===== 起動 =====
+    setStatus('① LIFF初期化中…');
+    if (typeof liff === 'undefined') {
+      showError('LIFF SDK を読み込めませんでした。電波・通信環境を確認のうえ、もう一度開いてください。');
+    } else if (API_URL.indexOf('__ここに') === 0) {
+      showError('準備中：API_URL（デプロイURL）が未設定です。先生にお問い合わせください。');
+    } else {
+      liff.init({ liffId: LIFF_ID }).then(function(){
+        setStatus('② ログイン確認中…');
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        setStatus('③ 本人確認の通行証を取得中…');
+        var token = liff.getAccessToken();
+        if (!token) throw new Error('アクセストークンが取得できませんでした');
+        setStatus('④ 予約を読み込み中…');
+        return callApi('myBookings', token);
+      }).then(function(res){
+        if (!res) return; // login() でリダイレクト中
+        dbg('応答: ' + JSON.stringify(res).slice(0, 120));
+        if (!res.ok){ showError('読み込みに失敗しました（' + res.error + '）'); return; }
+        if (!res.data.linked){
+          showError('このLINEはまだ生徒登録と紐付いていません。先生から届いた登録リンクを先に開いてください。');
+          return;
+        }
+        render(res.data.students);
+      }).catch(function(err){
+        showError('エラー：' + (err && err.message ? err.message : String(err)));
+      });
+    }
+  </script>
+</body>
+</html>
