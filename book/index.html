@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>振替予約 - 優光書道教室</title>
+  <style>
+    :root {
+      --navy: #1a2940;
+      --blue: #2563eb;
+      --bg: #f7f5f1;
+      --card: #ffffff;
+      --text: #1f2937;
+      --text-light: #6b7280;
+      --gray: #6b7280;
+      --gray-light: #9ca3af;
+      --border: #e5e7eb;
+      --border-soft: #f3f4f6;
+      --green: #16a34a;
+      --green-bg: #dcfce7;
+      --green-light: #f0fdf4;
+      --green-border: #bbf7d0;
+      --red: #dc2626;
+      --red-bg: #fef2f2;
+      --orange: #d97706;
+      --highlight: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ヘッダー */
+    .header {
+      background: linear-gradient(135deg, var(--navy), var(--blue));
+      color: white;
+      padding: 28px 16px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .header-content { position: relative; z-index: 1; }
+    .header h1 {
+      font-size: 24px; font-weight: 800;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .header p {
+      font-size: 13px; opacity: 0.85;
+      font-weight: 500; letter-spacing: 1px;
+    }
+
+    .container { padding: 0 16px 32px; max-width: 480px; margin: 0 auto; }
+
+    /* ステップインジケーター */
+    .steps {
+      display: flex; justify-content: center; align-items: flex-start;
+      gap: 0; padding: 20px 16px 8px;
+      max-width: 480px; margin: 0 auto;
+    }
+    .step-item {
+      display: flex; flex-direction: column; align-items: center;
+      flex: 1; position: relative;
+    }
+    .step-circle {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: #e5e7eb; color: var(--gray-light);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+      transition: all 0.3s ease; position: relative; z-index: 1;
+    }
+    .step-label {
+      font-size: 10px; color: var(--gray-light); margin-top: 5px;
+      font-weight: 500; transition: all 0.3s;
+      white-space: nowrap;
+    }
+    .step-item.active .step-circle {
+      background: var(--blue); color: white;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.35);
+    }
+    .step-item.active .step-label { color: var(--blue); font-weight: 700; }
+    .step-item.done .step-circle { background: var(--green); color: white; }
+    .step-item.done .step-label { color: var(--green); }
+    .step-line {
+      position: absolute; top: 14px; left: calc(50% + 18px);
+      width: calc(100% - 36px); height: 2px;
+      background: #e5e7eb; transition: background 0.3s;
+    }
+    .step-item.done .step-line { background: var(--green); }
+
+    /* カード */
+    .card {
+      background: var(--card); border-radius: 16px;
+      padding: 28px 24px; margin-top: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      border: 1px solid var(--border);
+      animation: cardIn 0.35s ease;
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card h2 {
+      font-size: 20px; font-weight: 700; color: var(--navy);
+      margin-bottom: 8px;
+    }
+    .card .subtitle {
+      font-size: 15px; line-height: 1.7; color: var(--text-light);
+      margin-bottom: 20px;
+    }
+
+    /* ボタン */
+    .btn {
+      width: 100%; padding: 16px; font-size: 16px; font-weight: 700;
+      border: none; border-radius: 12px; cursor: pointer;
+      transition: all 0.2s; -webkit-appearance: none;
+      letter-spacing: 0.5px;
+      font-family: inherit;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--navy), var(--blue));
+      color: white;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.25);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(37,99,235,0.35);
+    }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled {
+      background: #d1d5db; box-shadow: none; cursor: not-allowed; transform: none;
+    }
+    .btn-back {
+      background: none; color: var(--gray); font-size: 14px;
+      padding: 12px; margin-top: 4px; font-weight: 500;
+    }
+    .btn-back:hover { color: var(--blue); }
+    .btn-secondary {
+      background: var(--border-soft); color: var(--navy); box-shadow: none;
+    }
+    .btn-secondary:hover { background: var(--border); }
+
+    /* 兄弟選択 */
+    .sibling-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 16px 18px;
+      font-size: 16px; text-align: left;
+      background: white; border: 2px solid var(--border);
+      border-radius: 12px; cursor: pointer; margin-bottom: 8px;
+      transition: all 0.2s; color: var(--text); font-weight: 600;
+      font-family: inherit;
+    }
+    .sibling-btn::after {
+      content: '\203A'; font-size: 20px; color: var(--gray-light);
+      transition: color 0.2s;
+    }
+    .sibling-btn:hover {
+      border-color: var(--blue); background: #eff6ff;
+    }
+    .sibling-btn:hover::after { color: var(--blue); }
+    .sibling-info { font-size: 12px; color: var(--gray-light); margin-top: 2px; font-weight: 400; }
+
+    /* スロット選択 */
+    .slot-remaining {
+      font-size: 12px; color: var(--gray); display: block; margin-top: 3px;
+      font-weight: 500;
+    }
+
+    /* 確認画面 */
+    .confirm-box {
+      background: var(--bg); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+    .confirm-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      font-size: 15px;
+    }
+    .confirm-row:last-child { border-bottom: none; }
+    .confirm-label { color: var(--gray); font-size: 13px; font-weight: 500; }
+    .confirm-value { font-weight: 700; color: var(--text); }
+
+    /* 完了画面 */
+    .success-icon {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--green), #15803d);
+      display: flex; align-items: center; justify-content: center;
+      margin: 8px auto 20px;
+      box-shadow: 0 4px 16px rgba(22,163,74,0.3);
+      animation: popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);
+    }
+    .success-icon svg { width: 32px; height: 32px; }
+    @keyframes popIn {
+      from { transform: scale(0); } to { transform: scale(1); }
+    }
+    .success-msg {
+      text-align: center; font-size: 20px; font-weight: 700;
+      color: var(--green); margin-bottom: 20px;
+    }
+    .success-detail {
+      background: var(--green-light); border-radius: 12px; padding: 16px 20px;
+      margin-bottom: 20px; border: 1px solid var(--green-border);
+      white-space: pre-line; font-size: 14px; line-height: 1.8; color: var(--text);
+    }
+    .success-detail .confirm-row { border-bottom-color: var(--green-border); }
+
+    /* エラー */
+    .error-msg {
+      color: var(--red); font-size: 14px; margin-top: 8px;
+      display: none; padding: 8px 12px;
+      background: var(--red-bg); border-radius: 8px;
+    }
+    .fatal-msg {
+      color: #b91c1c; background: var(--red-bg); border-radius: 10px;
+      padding: 16px; font-size: 14px; line-height: 1.7;
+      border: 1px solid #fecaca;
+    }
+
+    /* ローディング */
+    .loading { text-align: center; padding: 60px 20px; }
+    .loading p { color: var(--gray-light); font-size: 15px; margin-top: 16px; }
+    .dots { display: flex; gap: 6px; justify-content: center; }
+    .dots span {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #cbd5e1; animation: bounce 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-10px); opacity: 1; }
+    }
+
+    /* 画面切り替え */
+    .screen { display: none; }
+    .screen.active { display: block; animation: cardIn 0.35s ease; }
+
+    .close-hint {
+      text-align: center; color: var(--gray-light); font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    /* ===== カレンダー（一画面型振替UI） ===== */
+    .cal-hint {
+      background: #eff6ff; color: var(--blue);
+      padding: 10px 14px; border-radius: 10px;
+      font-size: 13px; font-weight: 600;
+      margin-bottom: 14px; text-align: center;
+      border: 1px solid #bfdbfe;
+      line-height: 1.5;
+    }
+    .cal-hint.makeup {
+      background: #fff7ed; color: #c2410c;
+      border-color: #fed7aa;
+    }
+    .cal-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px; padding: 0 2px;
+    }
+    .cal-nav-btn {
+      background: var(--border-soft); border: none;
+      width: 36px; height: 36px; border-radius: 8px;
+      font-size: 18px; font-weight: 700; cursor: pointer;
+      color: var(--navy);
+      font-family: inherit;
+    }
+    .cal-nav-btn:hover { background: var(--border); }
+    .cal-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .cal-nav-month {
+      font-size: 17px; font-weight: 800; color: var(--navy);
+      letter-spacing: 0.5px;
+    }
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px; margin-bottom: 12px;
+      width: 100%; box-sizing: border-box;
+    }
+    .cal-grid > * { min-width: 0; }
+    .cal-dow {
+      text-align: center; font-size: 11px; font-weight: 700;
+      padding: 6px 0; color: var(--gray);
+    }
+    .cal-dow.sun { color: var(--red); }
+    .cal-dow.sat { color: var(--blue); }
+    .cal-cell {
+      aspect-ratio: 1; min-height: 46px;
+      background: white; border-radius: 10px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      position: relative; cursor: default;
+      border: 1.5px solid transparent;
+      font-weight: 700; color: var(--text);
+      transition: all 0.15s;
+    }
+    .cal-cell .num { font-size: 14px; line-height: 1; }
+    .cal-cell .badge {
+      position: absolute; bottom: 3px;
+      font-size: 9px; font-weight: 800;
+      padding: 1px 4px; border-radius: 6px;
+      line-height: 1;
+    }
+    /* 他月 */
+    .cal-cell.other { opacity: 0.25; }
+    /* 過去 */
+    .cal-cell.past { opacity: 0.35; cursor: not-allowed; }
+    .cal-cell.past .num { color: var(--gray-light); }
+    /* 通常曜日（欠席候補） */
+    .cal-cell.my-day {
+      background: #eff6ff; border-color: #bfdbfe;
+      cursor: pointer;
+    }
+    .cal-cell.my-day:hover { background: #dbeafe; transform: scale(1.04); }
+    .cal-cell.my-day .num { color: #1e40af; }
+    .cal-cell.my-day .badge { background: #2563eb; color: white; }
+    /* 振替済み（既存振替済み） */
+    .cal-cell.done {
+      background: var(--border-soft); cursor: not-allowed;
+    }
+    .cal-cell.done .num { color: var(--gray-light); text-decoration: line-through; }
+    .cal-cell.done .badge { background: var(--gray); color: white; }
+    /* 開講日（振替候補） */
+    .cal-cell.open-class {
+      background: #f0fdf4; border-color: #bbf7d0;
+      cursor: pointer;
+    }
+    .cal-cell.open-class:hover { background: #dcfce7; transform: scale(1.04); }
+    .cal-cell.open-class .num { color: #14532d; }
+    .cal-cell.open-class .badge { background: var(--green); color: white; }
+    .cal-cell.open-class.full {
+      background: var(--border-soft); border-color: var(--border);
+      cursor: not-allowed; opacity: 0.55;
+    }
+    .cal-cell.open-class.full .num { color: var(--gray-light); }
+    .cal-cell.open-class.full .badge { background: var(--gray-light); color: white; }
+    /* 選択中の欠席日 */
+    .cal-cell.selected-absent {
+      background: var(--navy); border-color: var(--navy);
+      transform: scale(1.06);
+      box-shadow: 0 4px 10px rgba(26,41,64,0.35);
+    }
+    .cal-cell.selected-absent .num { color: white; }
+    .cal-cell.selected-absent .badge { background: white; color: var(--navy); }
+    /* 選択中の振替先 */
+    .cal-cell.selected-makeup {
+      background: var(--orange); border-color: var(--orange);
+      transform: scale(1.06);
+      box-shadow: 0 4px 10px rgba(217,119,6,0.4);
+    }
+    .cal-cell.selected-makeup .num { color: white; }
+    .cal-cell.selected-makeup .badge { background: white; color: var(--orange); }
+    /* 休講 */
+    .cal-cell.closed { background: var(--border-soft); cursor: not-allowed; }
+    .cal-cell.closed .num { color: var(--gray-light); text-decoration: line-through; }
+    .cal-cell.closed::after {
+      content: '休'; position: absolute; bottom: 3px; right: 5px;
+      font-size: 9px; color: var(--red); font-weight: 800;
+    }
+    /* 今日 */
+    .cal-cell.today { box-shadow: inset 0 0 0 2px var(--blue); }
+
+    /* カレンダー凡例 */
+    .cal-legend {
+      display: flex; flex-wrap: wrap; gap: 8px 14px;
+      padding: 10px 12px; background: var(--bg);
+      border-radius: 10px; margin-bottom: 14px;
+      font-size: 11px; color: var(--text-light);
+    }
+    .cal-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .cal-legend-sq {
+      width: 14px; height: 14px; border-radius: 4px;
+      border: 1.5px solid transparent;
+    }
+    .cal-legend-sq.my-day { background: #eff6ff; border-color: #bfdbfe; }
+    .cal-legend-sq.open-class { background: #f0fdf4; border-color: #bbf7d0; }
+    .cal-legend-sq.selected-absent { background: var(--navy); }
+    .cal-legend-sq.selected-makeup { background: var(--orange); }
+
+    /* 選択状態サマリー */
+    .cal-summary {
+      background: var(--card); border: 1.5px solid var(--border);
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+    }
+    .cal-summary-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; font-size: 13px;
+    }
+    .cal-summary-row + .cal-summary-row { border-top: 1px solid var(--border); }
+    .cal-summary-icon {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; flex-shrink: 0; color: white;
+    }
+    .cal-summary-icon.absent { background: var(--navy); }
+    .cal-summary-icon.makeup { background: var(--orange); }
+    .cal-summary-icon.empty { background: var(--border); color: var(--gray-light); }
+    .cal-summary-label { color: var(--gray); font-size: 12px; min-width: 50px; }
+    .cal-summary-value { font-weight: 700; color: var(--text); flex: 1; }
+    .cal-summary-value.empty { color: var(--gray-light); font-weight: 500; }
+
+    /* フリー型予約サマリー */
+    .free-summary { background: #f5f3ff; border: 1.5px solid #ddd6fe; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+    .free-summary-title { font-size: 13px; font-weight: 700; color: #5b21b6; margin-bottom: 8px; }
+    .free-summary-count { font-size: 15px; font-weight: 800; color: #6d28d9; margin-bottom: 10px; }
+    .free-summary-count.full { color: #15803d; }
+    .free-summary-list { display: flex; flex-direction: column; gap: 6px; }
+    .free-booking-pill { display: flex; align-items: center; gap: 10px; background: white; border: 1.5px solid #c4b5fd; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+    .free-booking-pill .fb-date { font-weight: 700; color: var(--text); flex: 1; }
+    .free-booking-pill .fb-time { color: var(--gray); font-size: 12px; }
+    .free-booking-pill .fb-remove { background: none; border: none; color: #b91c1c; font-size: 18px; cursor: pointer; padding: 0 4px; font-weight: 700; }
+    .free-booking-pill.existing { background: #ecfdf5; border-color: #86efac; }
+    .free-booking-pill.existing .fb-date { color: #14532d; }
+    .free-summary-empty { font-size: 12px; color: var(--gray-light); font-style: italic; padding: 4px 0; }
+
+    /* 時間スロット展開 */
+    .cal-slots {
+      background: #fff7ed; border: 1.5px solid #fed7aa;
+      border-radius: 12px; padding: 14px; margin-bottom: 14px;
+      animation: cardIn 0.25s ease;
+    }
+    .cal-slots-title {
+      font-size: 13px; font-weight: 700; color: #c2410c;
+      margin-bottom: 10px;
+    }
+    .cal-slot-grid {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .cal-slot-btn {
+      flex: 1 1 calc(50% - 4px); min-width: 110px;
+      padding: 12px 14px; font-size: 15px; font-weight: 700;
+      background: white; border: 2px solid #fed7aa;
+      border-radius: 10px; cursor: pointer;
+      color: #c2410c; text-align: center;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .cal-slot-btn:hover:not(:disabled) {
+      background: #ffedd5; transform: translateY(-1px);
+    }
+    .cal-slot-btn.selected {
+      background: var(--orange); border-color: var(--orange);
+      color: white;
+    }
+    .cal-slot-btn:disabled {
+      opacity: 0.4; cursor: not-allowed;
+      background: var(--border-soft); border-color: var(--border);
+      color: var(--gray-light);
+    }
+    .cal-slot-remaining {
+      display: block; font-size: 11px; font-weight: 500;
+      margin-top: 3px; opacity: 0.85;
+    }
+
+    .dbg { margin-top: 14px; font-size: 11px; color: #c4bdb4; text-align: center; word-break: break-all; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-content">
+    <h1>優光書道教室</h1>
+    <p>振替予約</p>
+  </div>
+</div>
+
+<div class="steps">
+  <div class="step-item active" id="step1">
+    <div class="step-circle">1</div>
+    <div class="step-label">欠席日</div>
+    <div class="step-line"></div>
+  </div>
+  <div class="step-item" id="step2">
+    <div class="step-circle">2</div>
+    <div class="step-label">振替先</div>
+    <div class="step-line"></div>
+  </div>
+  <div class="step-item" id="step3">
+    <div class="step-circle">3</div>
+    <div class="step-label">確定</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- 兄弟選択画面 -->
+  <div class="screen" id="screenSibling">
+    <div class="card">
+      <h2>誰の振替予約ですか？</h2>
+      <p class="subtitle">お子さまを選んでください。</p>
+      <div id="siblingList"></div>
+    </div>
+  </div>
+
+  <!-- STEP 1+2: カレンダー画面（欠席日 → 振替先 を一画面で選択） -->
+  <div class="screen" id="screenCal">
+    <div class="card">
+      <h2 id="studentGreeting"></h2>
+      <div class="cal-hint" id="calHint">青枠の日（あなたの通常クラス）をタップして、お休みする日を選んでください</div>
+
+      <div class="cal-nav">
+        <button class="cal-nav-btn" id="calPrevBtn" onclick="changeCalMonth(-1)">‹</button>
+        <div class="cal-nav-month" id="calMonthLabel"></div>
+        <button class="cal-nav-btn" id="calNextBtn" onclick="changeCalMonth(1)">›</button>
+      </div>
+
+      <div class="cal-grid" id="calGrid"></div>
+
+      <div class="cal-legend">
+        <div class="cal-legend-item"><span class="cal-legend-sq my-day"></span>あなたのクラス</div>
+        <div class="cal-legend-item"><span class="cal-legend-sq open-class"></span>開講日（振替候補）</div>
+        <div class="cal-legend-item"><span class="cal-legend-sq selected-absent"></span>お休み</div>
+        <div class="cal-legend-item"><span class="cal-legend-sq selected-makeup"></span>振替先</div>
+      </div>
+
+      <div id="calTimeSlots"></div>
+
+      <div class="cal-summary">
+        <div class="cal-summary-row">
+          <span class="cal-summary-icon" id="calSummaryAbsentIcon">1</span>
+          <span class="cal-summary-label">お休み</span>
+          <span class="cal-summary-value empty" id="calSummaryAbsent">未選択</span>
+        </div>
+        <div class="cal-summary-row">
+          <span class="cal-summary-icon" id="calSummaryMakeupIcon">2</span>
+          <span class="cal-summary-label">振替先</span>
+          <span class="cal-summary-value empty" id="calSummaryMakeup">未選択</span>
+        </div>
+      </div>
+
+      <div class="error-msg" id="calError"></div>
+
+      <button class="btn btn-primary" id="calProceedBtn" onclick="proceedFromCalendar()" disabled>振替先を選んでください</button>
+      <button class="btn btn-back" id="calBackToAbsentBtn" style="display:none;" onclick="handleAbsentTap('')">&#8249; お休み日を選び直す</button>
+      <button class="btn btn-back" id="backToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; お子さまの選択に戻る</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: 確認 -->
+  <div class="screen" id="screen3">
+    <div class="card">
+      <h2>内容をご確認ください</h2>
+      <p class="subtitle">以下の内容でよろしいですか？</p>
+      <div class="confirm-box">
+        <div class="confirm-row">
+          <span class="confirm-label">お名前</span>
+          <span class="confirm-value" id="cfName"></span>
+        </div>
+        <div class="confirm-row">
+          <span class="confirm-label">お休みする日</span>
+          <span class="confirm-value" id="cfAbsent"></span>
+        </div>
+        <div class="confirm-row">
+          <span class="confirm-label">振替先</span>
+          <span class="confirm-value" id="cfNew"></span>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="submitBtn" onclick="doSubmit()">この内容で確定する</button>
+      <button class="btn btn-back" onclick="showCalendar()">&#8249; 戻る</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: 完了 -->
+  <div class="screen" id="screen4">
+    <div class="card">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="success-msg">振替予約が完了しました</div>
+      <div class="success-detail" id="successDetail"></div>
+      <p class="close-hint">ありがとうございます。この画面は閉じて大丈夫です。</p>
+      <button class="btn btn-secondary" onclick="resetAll()">もう一件予約する</button>
+    </div>
+  </div>
+
+  <!-- フリー型：月次自己予約画面 -->
+  <div class="screen" id="screenFreeBook">
+    <div class="card">
+      <h2 id="freeStudentGreeting"></h2>
+      <p class="subtitle">月3回まで、ご希望の日をカレンダーから選んでください。</p>
+
+      <div class="free-summary">
+        <div class="free-summary-title">📅 <span id="freeMonthLabel"></span>の予約状況</div>
+        <div class="free-summary-count">
+          <span id="freeBookedCount">0</span> / 3 日 予約中
+        </div>
+        <div class="free-summary-list" id="freeBookingsList"></div>
+      </div>
+
+      <div class="cal-nav">
+        <button class="cal-nav-btn" id="freeCalPrevBtn" onclick="changeFreeCalMonth(-1)">‹</button>
+        <div class="cal-nav-month" id="freeCalMonthLabel"></div>
+        <button class="cal-nav-btn" id="freeCalNextBtn" onclick="changeFreeCalMonth(1)">›</button>
+      </div>
+
+      <div class="cal-grid" id="freeCalGrid"></div>
+
+      <div class="cal-legend">
+        <div class="cal-legend-item"><span class="cal-legend-sq open-class"></span>開講日（予約可）</div>
+        <div class="cal-legend-item"><span class="cal-legend-sq selected-makeup"></span>予約済み</div>
+      </div>
+
+      <div id="freeCalTimeSlots"></div>
+
+      <div class="error-msg" id="freeCalError"></div>
+
+      <button class="btn btn-primary" id="freeSubmitBtn" onclick="submitFreeBookings()" disabled>予約内容を確定する</button>
+      <button class="btn btn-back" id="freeBackBtn" style="display:none;" onclick="cancelFreeDaySelection()">&#8249; キャンセル</button>
+    </div>
+  </div>
+
+  <!-- エラー -->
+  <div class="screen" id="screenError">
+    <div class="card">
+      <h2>ご案内</h2>
+      <div class="fatal-msg" id="fatalMsg"></div>
+    </div>
+  </div>
+
+  <!-- ローディング -->
+  <div class="screen active" id="screenLoading">
+    <div class="loading">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <p id="loadingText">準備中…</p>
+    </div>
+  </div>
+
+  <div id="dbg" class="dbg"></div>
+
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  // ============================================================
+  // 設定
+  // ============================================================
+  var LIFF_ID = '2010125456-yyTmXEyt';
+  var API_URL = 'https://script.google.com/macros/s/AKfycbzyCJJ3IfXpPluaZ6LQqjeDKlhu0amXLvp8fCv59CxIMMl0ic8SjuqbtIsbhwbZ_6S8/exec';
+
+  // ============================================================
+  // 状態管理
+  // ============================================================
+  var state = {
+    token: null,
+    students: [],      // myBookings が返した生徒（sid 付き・enrich 前の生データ）
+    student: null,     // 現在選択中の生徒（enrich 後）
+    mode: '',          // 'single' | 'siblings'
+    absentDate: '', absentDateDisplay: '',
+    newDate: '', newTime: '', newDateDisplay: '',
+    slots: [],
+    freeBookings: [],
+    freeSelectedDate: null,
+    freeCalViewMonth: null,
+    calStep: 'absent', // 'absent' | 'makeup' | 'done'
+    calViewMonth: null
+  };
+
+  var DAY_NAMES = ['日','月','火','水','木','金','土'];
+  var DAY_MAP = { '日':0, '月':1, '火':2, '水':3, '木':4, '金':5, '土':6 };
+  var FREE_MAX = 3;
+
+  // ============================================================
+  // 通信（simple request：POST + text/plain でプリフライト回避）
+  // ============================================================
+  function freshToken() {
+    try { var t = liff.getAccessToken(); if (t) state.token = t; } catch (e) {}
+    return state.token;
+  }
+  function callApi(action, extra) {
+    var body = { action: action, accessToken: freshToken() };
+    if (extra) { for (var k in extra) { body[k] = extra[k]; } }
+    return fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    }).then(function(r){ return r.json(); });
+  }
+
+  function setStatus(s){ var el = document.getElementById('loadingText'); if (el) el.textContent = s; }
+  function dbg(s){ document.getElementById('dbg').textContent = s; }
+
+  // ============================================================
+  // 画面切り替え
+  // ============================================================
+  function showScreen(n) {
+    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('screen' + n).classList.add('active');
+    for (var i = 1; i <= 3; i++) {
+      var item = document.getElementById('step' + i);
+      item.className = 'step-item';
+      if (i < n) item.classList.add('done');
+      if (i === n) item.classList.add('active');
+    }
+    if (n === 4) {
+      for (var j = 1; j <= 3; j++) {
+        document.getElementById('step' + j).className = 'step-item done';
+      }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function showScreenById(id) {
+    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function showCalendar() {
+    showScreenById('screenCal');
+    updateStepsForCalendar();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function updateStepsForCalendar() {
+    for (var i = 1; i <= 3; i++) {
+      document.getElementById('step' + i).className = 'step-item';
+    }
+    if (state.calStep === 'absent') {
+      document.getElementById('step1').classList.add('active');
+    } else {
+      document.getElementById('step1').classList.add('done');
+      document.getElementById('step2').classList.add('active');
+    }
+    var backBtn = document.getElementById('calBackToAbsentBtn');
+    if (backBtn) {
+      backBtn.style.display = (state.calStep === 'makeup') ? 'block' : 'none';
+    }
+  }
+  function showLoading(msg) { setStatus(msg || '確認しています...'); showScreenById('screenLoading'); }
+  function showFatal(msg) {
+    document.getElementById('fatalMsg').textContent = msg;
+    showScreenById('screenError');
+  }
+  function showError(id, msg) {
+    var el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideError(id) { document.getElementById(id).style.display = 'none'; }
+
+  // ============================================================
+  // 起動：LIFF → トークン → myBookings で生徒リスト取得
+  // ============================================================
+  function boot() {
+    setStatus('① 起動中…');
+    if (typeof liff === 'undefined') {
+      showFatal('通信環境の問題でうまく開けませんでした。電波の良い場所でもう一度お試しください。');
+      return;
+    }
+    liff.init({ liffId: LIFF_ID }).then(function() {
+      setStatus('② ログイン確認中…');
+      if (!liff.isLoggedIn()) { liff.login(); return null; }
+      setStatus('③ 通行証を取得中…');
+      state.token = liff.getAccessToken();
+      if (!state.token) throw new Error('アクセストークンが取得できませんでした');
+      setStatus('④ 生徒情報を確認中…');
+      return callApi('myBookings');
+    }).then(function(res) {
+      if (!res) return; // login() でリダイレクト中
+      dbg('応答: ' + JSON.stringify(res).slice(0, 120));
+      if (!res.ok) { showFatal('読み込みに失敗しました（' + res.error + '）'); return; }
+      if (!res.data.linked) {
+        showFatal('このLINEはまだ生徒登録と紐付いていません。先生から届いた登録リンクを先に開いてください。');
+        return;
+      }
+      state.students = res.data.students || [];
+      routeStudents();
+    }).catch(function(err) {
+      showFatal('エラー：' + (err && err.message ? err.message : String(err)));
+    });
+  }
+
+  function routeStudents() {
+    if (state.students.length === 0) {
+      showFatal('登録情報が見つかりませんでした。先生にお問い合わせください。');
+      return;
+    }
+    if (state.students.length === 1) {
+      state.mode = 'single';
+      selectStudentBySid(state.students[0].sid);
+    } else {
+      state.mode = 'siblings';
+      renderSiblingList(state.students);
+      showScreenById('screenSibling');
+    }
+  }
+
+  function findStudent(sid) {
+    for (var i = 0; i < state.students.length; i++) {
+      if (state.students[i].sid === sid) return state.students[i];
+    }
+    return null;
+  }
+
+  // myBookings の生データを、カレンダーUIが期待する形に整形
+  function enrichStudent(s) {
+    var bookings = s.bookings || [];
+    var rescheduledDates = [];
+    var bookedSlots = [];
+    var freeBookings = [];
+    bookings.forEach(function(b) {
+      if (b.bookingType === 'free') {
+        if (b.newDate && b.newTime) freeBookings.push({ date: b.newDate, time: b.newTime });
+      } else {
+        if (b.absentDate) rescheduledDates.push(b.absentDate);
+      }
+      if (b.newDate && b.newTime) bookedSlots.push(b.newDate + '_' + b.newTime);
+    });
+    return {
+      sid: s.sid,
+      name: s.name || '',
+      regularDay: s.regularDay || '',
+      regularTime: s.regularTime || '',
+      type: s.type || '',
+      classType: s.classType || 'regular',
+      rescheduledDates: rescheduledDates,
+      bookedSlots: bookedSlots,
+      freeBookings: freeBookings
+    };
+  }
+
+  // 生徒選択 → 予約枠を取得 → フロー開始
+  function selectStudentBySid(sid) {
+    var raw = findStudent(sid);
+    if (!raw) { showFatal('生徒情報が見つかりませんでした。'); return; }
+    showLoading('予約枠を確認しています…');
+    callApi('availableSlots', { sid: sid }).then(function(res) {
+      if (!res || !res.ok) {
+        showFatal('予約枠の取得に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認ください。'));
+        return;
+      }
+      state.slots = (res.data && res.data.slots) || [];
+      state.student = enrichStudent(raw);
+      startBookingFlow(state.student);
+    }).catch(function(err) {
+      showFatal('エラー：' + (err && err.message ? err.message : String(err)));
+    });
+  }
+
+  // ============================================================
+  // 共通：予約フロー開始
+  // ============================================================
+  function startBookingFlow(student) {
+    if (!student || !student.name) {
+      showFatal('生徒情報の読み込みに失敗しました。画面を閉じてもう一度お試しください。');
+      return;
+    }
+    // フリー型は別フロー
+    if (student.classType === 'free') {
+      startFreeBookingFlow(student);
+      return;
+    }
+    state.student = student;
+    state.absentDate = ''; state.absentDateDisplay = '';
+    state.newDate = ''; state.newTime = ''; state.newDateDisplay = '';
+    state.calStep = 'absent';
+    var now = new Date();
+    state.calViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    document.getElementById('studentGreeting').textContent =
+      student.name + 'さん、お疲れさまです';
+    document.getElementById('backToSiblingBtn').style.display =
+      (state.students && state.students.length > 1) ? 'block' : 'none';
+    document.getElementById('calHint').className = 'cal-hint';
+    document.getElementById('calHint').textContent = '青枠の日（あなたのクラス：' + student.regularTime + '）をタップして、お休みする日を選んでください';
+    document.getElementById('calTimeSlots').innerHTML = '';
+    updateCalSummary();
+    renderCalendar();
+    showCalendar();
+  }
+
+  // ============================================================
+  // 兄弟選択
+  // ============================================================
+  function renderSiblingList(students) {
+    var container = document.getElementById('siblingList');
+    container.innerHTML = '';
+    students.forEach(function(s) {
+      var btn = document.createElement('button');
+      btn.className = 'sibling-btn';
+      var info = (s.classType === 'free')
+        ? 'フリー型（月3回）'
+        : ((s.regularDay ? s.regularDay + '曜 ' : '') + (s.regularTime || ''));
+      btn.innerHTML = '<div>' + s.name +
+        '<div class="sibling-info">' + info + '</div></div>';
+      btn.onclick = (function(sid) { return function() { selectStudentBySid(sid); }; })(s.sid);
+      container.appendChild(btn);
+    });
+  }
+
+  function backToSibling() {
+    if (!state.students || state.students.length === 0) return;
+    renderSiblingList(state.students);
+    showScreenById('screenSibling');
+  }
+
+  // ============================================================
+  // フリー型：月次自己予約フロー
+  // ============================================================
+  function startFreeBookingFlow(student) {
+    state.student = student;
+    state.freeBookings = (student.freeBookings || []).map(function(b) {
+      return { date: b.date, time: b.time, isExisting: true };
+    });
+    state.freeSelectedDate = null;
+    var now = new Date();
+    state.freeCalViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    document.getElementById('freeStudentGreeting').textContent =
+      student.name + 'さん、お疲れさまです';
+    document.getElementById('freeCalTimeSlots').innerHTML = '';
+    document.getElementById('freeBackBtn').style.display = 'none';
+    hideError('freeCalError');
+    renderFreeCalendar();
+    renderFreeBookingsSummary();
+    showScreenById('screenFreeBook');
+  }
+
+  function changeFreeCalMonth(delta) {
+    var cur = state.freeCalViewMonth || new Date();
+    state.freeCalViewMonth = new Date(cur.getFullYear(), cur.getMonth() + delta, 1);
+    state.freeSelectedDate = null;
+    document.getElementById('freeCalTimeSlots').innerHTML = '';
+    document.getElementById('freeBackBtn').style.display = 'none';
+    renderFreeCalendar();
+    renderFreeBookingsSummary();
+  }
+
+  function renderFreeCalendar() {
+    var grid = document.getElementById('freeCalGrid');
+    grid.innerHTML = '';
+    DAY_NAMES.forEach(function(n, i) {
+      var hd = document.createElement('div');
+      hd.className = 'cal-dow' + (i === 0 ? ' sun' : (i === 6 ? ' sat' : ''));
+      hd.textContent = n;
+      grid.appendChild(hd);
+    });
+    var view = state.freeCalViewMonth;
+    var year = view.getFullYear(), month = view.getMonth();
+    document.getElementById('freeCalMonthLabel').textContent = year + '年' + (month + 1) + '月';
+    document.getElementById('freeMonthLabel').textContent = (month + 1) + '月';
+
+    var firstDow = new Date(year, month, 1).getDay();
+    var lastDate = new Date(year, month + 1, 0).getDate();
+    var prevLast = new Date(year, month, 0).getDate();
+    var today = new Date(); today.setHours(0,0,0,0);
+
+    for (var i = firstDow - 1; i >= 0; i--) {
+      grid.appendChild(buildFreeCalCell(new Date(year, month - 1, prevLast - i), true, today));
+    }
+    for (var d = 1; d <= lastDate; d++) {
+      grid.appendChild(buildFreeCalCell(new Date(year, month, d), false, today));
+    }
+    var totalCells = firstDow + lastDate;
+    var trail = (Math.ceil(totalCells / 7) * 7) - totalCells;
+    for (var t = 1; t <= trail; t++) {
+      grid.appendChild(buildFreeCalCell(new Date(year, month + 1, t), true, today));
+    }
+  }
+
+  function buildFreeCalCell(date, isOther, today) {
+    var cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    var dateStr = formatDate(date);
+    var isPast = date < today;
+
+    var num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = date.getDate();
+    cell.appendChild(num);
+
+    if (isOther) { cell.classList.add('other'); return cell; }
+    if (isPast) { cell.classList.add('past'); return cell; }
+
+    var openSlots = state.slots.filter(function(s) {
+      return s.date === dateStr && s.remaining > 0;
+    });
+    var hasOpen = openSlots.length > 0;
+    var bookedHere = state.freeBookings.filter(function(b) { return b.date === dateStr; })[0];
+
+    if (bookedHere) {
+      cell.classList.add('selected-makeup');
+      var b1 = document.createElement('span');
+      b1.className = 'badge';
+      b1.textContent = parseInt(bookedHere.time.split(':')[0], 10) + '時';
+      cell.appendChild(b1);
+      cell.style.cursor = 'pointer';
+      cell.onclick = function() { handleFreeDayTap(dateStr, date); };
+    } else if (hasOpen) {
+      cell.classList.add('open-class');
+      var b2 = document.createElement('span');
+      b2.className = 'badge';
+      b2.textContent = parseInt(openSlots[0].time.split(':')[0], 10) + '時';
+      cell.appendChild(b2);
+      cell.style.cursor = 'pointer';
+      cell.onclick = function() { handleFreeDayTap(dateStr, date); };
+    }
+    return cell;
+  }
+
+  function handleFreeDayTap(dateStr, dateObj) {
+    var existing = state.freeBookings.filter(function(b) { return b.date === dateStr; })[0];
+    if (existing) {
+      if (confirm((dateObj.getMonth()+1) + '月' + dateObj.getDate() + '日 ' + existing.time + ' の予約をキャンセルしますか？')) {
+        state.freeBookings = state.freeBookings.filter(function(b) { return b.date !== dateStr; });
+        renderFreeCalendar();
+        renderFreeBookingsSummary();
+      }
+      return;
+    }
+    if (state.freeBookings.length >= FREE_MAX) {
+      showError('freeCalError', '月' + FREE_MAX + '日が上限です。既存の予約をキャンセルしてから追加してください。');
+      return;
+    }
+    hideError('freeCalError');
+    state.freeSelectedDate = { dateStr: dateStr, dateObj: dateObj };
+    renderFreeTimeSlots(dateStr, dateObj);
+    document.getElementById('freeBackBtn').style.display = 'block';
+  }
+
+  function renderFreeTimeSlots(dateStr, dateObj) {
+    var container = document.getElementById('freeCalTimeSlots');
+    var slots = state.slots.filter(function(s) {
+      return s.date === dateStr && s.remaining > 0;
+    });
+    var displayDate = (dateObj.getMonth()+1) + '月' + dateObj.getDate() + '日（' + DAY_NAMES[dateObj.getDay()] + '）';
+    if (slots.length === 0) {
+      container.innerHTML = '<div class="cal-slots"><div class="cal-slots-title">' + displayDate + ' は開講枠がありません</div></div>';
+      return;
+    }
+    var html = '<div class="cal-slots">' +
+      '<div class="cal-slots-title">' + displayDate + ' の時間を選んでください</div>' +
+      '<div class="cal-slot-grid">';
+    slots.forEach(function(s) {
+      html += '<button type="button" class="cal-slot-btn" onclick="confirmFreeBooking(\'' + dateStr + '\',\'' + s.time + '\')">' + s.time + '</button>';
+    });
+    html += '</div></div>';
+    container.innerHTML = html;
+  }
+
+  function confirmFreeBooking(dateStr, time) {
+    state.freeBookings.push({ date: dateStr, time: time, isExisting: false });
+    state.freeSelectedDate = null;
+    document.getElementById('freeCalTimeSlots').innerHTML = '';
+    document.getElementById('freeBackBtn').style.display = 'none';
+    hideError('freeCalError');
+    renderFreeCalendar();
+    renderFreeBookingsSummary();
+  }
+
+  function cancelFreeDaySelection() {
+    state.freeSelectedDate = null;
+    document.getElementById('freeCalTimeSlots').innerHTML = '';
+    document.getElementById('freeBackBtn').style.display = 'none';
+  }
+
+  function renderFreeBookingsSummary() {
+    var listEl = document.getElementById('freeBookingsList');
+    var countEl = document.getElementById('freeBookedCount');
+    var submitBtn = document.getElementById('freeSubmitBtn');
+    var count = state.freeBookings.length;
+    countEl.textContent = count;
+    var summaryCount = countEl.parentNode;
+    if (summaryCount) summaryCount.classList.toggle('full', count >= FREE_MAX);
+    if (count === 0) {
+      listEl.innerHTML = '<div class="free-summary-empty">まだ予約がありません。カレンダーから日にちを選んでください。</div>';
+    } else {
+      var sorted = state.freeBookings.slice().sort(function(a, b) { return a.date.localeCompare(b.date); });
+      listEl.innerHTML = sorted.map(function(b) {
+        var parts = b.date.split('/');
+        var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+        var dispDate = (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
+        var cls = b.isExisting ? 'free-booking-pill existing' : 'free-booking-pill';
+        return '<div class="' + cls + '">' +
+          '<span class="fb-date">' + dispDate + '</span>' +
+          '<span class="fb-time">' + b.time + '</span>' +
+          '<button type="button" class="fb-remove" onclick="removeFreeBookingByDate(\'' + b.date + '\')" aria-label="削除">×</button>' +
+        '</div>';
+      }).join('');
+    }
+    var origBookings = (state.student && state.student.freeBookings) || [];
+    var hasChange = state.freeBookings.some(function(b) { return !b.isExisting; });
+    var hasRemoval = origBookings.some(function(orig) {
+      return !state.freeBookings.filter(function(b) { return b.date === orig.date && b.time === orig.time; })[0];
+    });
+    if (count > 0 && (hasChange || hasRemoval)) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '予約内容を確定する';
+    } else if (count === 0 && hasRemoval) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'すべての予約をキャンセルする';
+    } else {
+      submitBtn.disabled = true;
+      submitBtn.textContent = count === 0 ? 'カレンダーから日を選んでください' : '変更がありません';
+    }
+  }
+
+  function removeFreeBookingByDate(dateStr) {
+    state.freeBookings = state.freeBookings.filter(function(b) { return b.date !== dateStr; });
+    renderFreeCalendar();
+    renderFreeBookingsSummary();
+  }
+
+  function submitFreeBookings() {
+    var btn = document.getElementById('freeSubmitBtn');
+    if (btn.disabled) return;
+    var payload = state.freeBookings.map(function(b) { return { date: b.date, time: b.time }; });
+    var prev = btn.textContent;
+    btn.disabled = true; btn.textContent = '処理中...';
+    callApi('applyFreeBookings', { sid: state.student.sid, bookings: payload }).then(function(res) {
+      if (!res || !res.ok) {
+        btn.disabled = false; btn.textContent = prev;
+        showError('freeCalError', '送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認ください。'));
+        return;
+      }
+      if (!res.data || !res.data.success) {
+        btn.disabled = false; btn.textContent = prev;
+        showError('freeCalError', (res.data && res.data.message) ? res.data.message : '予約できませんでした。');
+        return;
+      }
+      // ローカルの生データも更新（再表示時の整合）
+      var raw = findStudent(state.student.sid);
+      if (raw) {
+        raw.bookings = payload.map(function(b) {
+          return { absentDate:'', absentTime:'', newDate:b.date, newTime:b.time, bookingType:'free' };
+        });
+      }
+      var sorted = payload.slice().sort(function(a, b) { return a.date.localeCompare(b.date); });
+      var lines = sorted.map(function(b) {
+        var parts = b.date.split('/');
+        var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+        return (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）' + b.time;
+      });
+      var msg = sorted.length === 0
+        ? 'すべての予約をキャンセルしました。'
+        : '以下の' + sorted.length + '日で予約しました：\n' + lines.join('\n');
+      document.querySelector('#screen4 .success-msg').textContent = sorted.length === 0 ? 'キャンセル完了' : 'ご予約が完了しました';
+      document.getElementById('successDetail').textContent = msg;
+      var retryBtn = document.querySelector('#screen4 .btn-secondary');
+      if (retryBtn) retryBtn.style.display = 'none';
+      showScreenById('screen4');
+    }).catch(function(err) {
+      btn.disabled = false; btn.textContent = prev;
+      showError('freeCalError', 'エラー：' + (err && err.message ? err.message : String(err)));
+    });
+  }
+
+  // ============================================================
+  // カレンダー描画（振替フロー）
+  // ============================================================
+  function renderCalendar() {
+    var grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+    DAY_NAMES.forEach(function(d, i) {
+      var head = document.createElement('div');
+      head.className = 'cal-dow' + (i === 0 ? ' sun' : (i === 6 ? ' sat' : ''));
+      head.textContent = d;
+      grid.appendChild(head);
+    });
+
+    var year = state.calViewMonth.getFullYear();
+    var month = state.calViewMonth.getMonth();
+    var firstDay = new Date(year, month, 1);
+    var lastDay = new Date(year, month + 1, 0);
+    var startDow = firstDay.getDay();
+
+    var myDow = DAY_MAP[state.student.regularDay];
+    var rescheduled = state.student.rescheduledDates || [];
+    var booked = state.student.bookedSlots || [];
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+
+    for (var i = startDow - 1; i >= 0; i--) {
+      var d = new Date(year, month, -i);
+      grid.appendChild(buildCalCell(d, true, myDow, rescheduled, booked, today));
+    }
+    for (var dd = 1; dd <= lastDay.getDate(); dd++) {
+      grid.appendChild(buildCalCell(new Date(year, month, dd), false, myDow, rescheduled, booked, today));
+    }
+    var total = startDow + lastDay.getDate();
+    var fill = (7 - (total % 7)) % 7;
+    for (var k = 1; k <= fill; k++) {
+      grid.appendChild(buildCalCell(new Date(year, month + 1, k), true, myDow, rescheduled, booked, today));
+    }
+
+    document.getElementById('calMonthLabel').textContent = year + '年' + (month + 1) + '月';
+    var nowMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    document.getElementById('calPrevBtn').disabled = (state.calViewMonth.getTime() <= nowMonth.getTime());
+    var maxMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+    document.getElementById('calNextBtn').disabled = (state.calViewMonth.getTime() >= maxMonth.getTime());
+  }
+
+  function buildCalCell(date, isOther, myDow, rescheduled, booked, today) {
+    var cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    var num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = date.getDate();
+    cell.appendChild(num);
+
+    var dateStr = formatDate(date);
+
+    if (isOther) { cell.classList.add('other'); return cell; }
+    if (date.getTime() < today.getTime()) { cell.classList.add('past'); return cell; }
+    if (date.getTime() === today.getTime()) { cell.classList.add('today'); }
+
+    var dow = date.getDay();
+    var isMyDay = (dow === myDow);
+    var isRescheduled = rescheduled.indexOf(dateStr) >= 0;
+    var daySlots = state.slots.filter(function(s) { return s.date === dateStr; });
+    var openSlots = daySlots.filter(function(s) {
+      var k = s.date + '_' + s.time;
+      return booked.indexOf(k) < 0 && s.remaining > 0;
+    });
+
+    var startHour = shortStartHour(state.student.regularTime);
+    var addBadge = function(text) {
+      var b = document.createElement('span');
+      b.className = 'badge';
+      b.textContent = text;
+      cell.appendChild(b);
+    };
+
+    if (state.calStep === 'absent') {
+      if (isMyDay) {
+        var isTodayCell = (date.getTime() === today.getTime());
+        if (isTodayCell && isPastRegularStart(state.student.regularTime)) {
+          cell.classList.add('past');
+          return cell;
+        }
+        if (isRescheduled) {
+          cell.classList.add('done');
+          addBadge('済');
+        } else {
+          cell.classList.add('my-day');
+          addBadge(startHour);
+          cell.onclick = (function(s) { return function() { handleAbsentTap(s); }; })(dateStr);
+        }
+      }
+    } else {
+      if (state.newDate === dateStr) {
+        cell.classList.add('selected-makeup');
+        addBadge(state.newTime ? shortStartHour(state.newTime) : '選択中');
+        if (state.absentDate === dateStr) {
+          cell.style.outline = '2px dashed var(--navy)';
+          cell.style.outlineOffset = '2px';
+        }
+      } else if (state.absentDate === dateStr) {
+        cell.classList.add('selected-absent');
+        addBadge(startHour);
+        var otherSlots = openSlots.filter(function(s) { return s.time !== state.student.regularTime; });
+        if (otherSlots.length > 0) {
+          cell.onclick = (function(s) { return function() { handleMakeupTap(s); }; })(dateStr);
+          cell.style.cursor = 'pointer';
+          cell.title = '同じ日の別の時間に振替できます';
+        }
+      } else if (isMyDay) {
+        var isTodayCell2 = (date.getTime() === today.getTime());
+        if (isTodayCell2 && isPastRegularStart(state.student.regularTime)) {
+          cell.classList.add('past');
+          return cell;
+        }
+        if (isRescheduled) {
+          cell.classList.add('done');
+          addBadge('済');
+        } else {
+          cell.classList.add('my-day');
+          addBadge(startHour);
+          var otherTimeSlots = openSlots.filter(function(s) { return s.time !== state.student.regularTime; });
+          if (otherTimeSlots.length > 0) {
+            cell.onclick = (function(s) { return function() { handleMakeupTap(s); }; })(dateStr);
+            cell.style.cursor = 'pointer';
+            cell.title = '同じ曜日の別の時間に振替できます';
+          } else {
+            cell.style.cursor = 'default';
+            cell.style.opacity = '0.55';
+          }
+        }
+      } else if (daySlots.length > 0) {
+        cell.classList.add('open-class');
+        if (openSlots.length === 0) {
+          cell.classList.add('full');
+        } else {
+          cell.onclick = (function(s) { return function() { handleMakeupTap(s); }; })(dateStr);
+        }
+      }
+    }
+    return cell;
+  }
+
+  function shortStartHour(timeStr) {
+    if (!timeStr) return '';
+    var head = timeStr.split('-')[0];
+    var h = parseInt(head.split(':')[0]);
+    return isNaN(h) ? '' : h + '時';
+  }
+
+  function isPastRegularStart(timeStr) {
+    if (!timeStr) return false;
+    var head = timeStr.split('-')[0].split(':');
+    var sh = parseInt(head[0]);
+    var sm = parseInt(head[1] || 0);
+    var now = new Date();
+    var startSec = sh * 3600 + sm * 60;
+    var nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    return nowSec >= startSec;
+  }
+
+  function handleAbsentTap(dateStr) {
+    if (!dateStr) {
+      state.absentDate = ''; state.absentDateDisplay = '';
+      state.newDate = ''; state.newTime = ''; state.newDateDisplay = '';
+      state.calStep = 'absent';
+      document.getElementById('calHint').className = 'cal-hint';
+      document.getElementById('calHint').textContent = '青枠の日（あなたのクラス：' + state.student.regularTime + '）をタップして、お休みする日を選んでください';
+      document.getElementById('calTimeSlots').innerHTML = '';
+      updateStepsForCalendar();
+      updateCalSummary();
+      renderCalendar();
+      return;
+    }
+    state.absentDate = dateStr;
+    state.absentDateDisplay = formatDateLabel(dateStr) + ' ' + state.student.regularTime;
+    state.calStep = 'makeup';
+    state.newDate = ''; state.newTime = ''; state.newDateDisplay = '';
+    document.getElementById('calHint').className = 'cal-hint makeup';
+    document.getElementById('calHint').textContent = '緑の日（開講日）から振替先を選んでください。同じ日の別時間に振替する場合はお休み日（紺）をタップ';
+    document.getElementById('calTimeSlots').innerHTML = '';
+    updateStepsForCalendar();
+    updateCalSummary();
+    renderCalendar();
+  }
+
+  function handleMakeupTap(dateStr) {
+    state.newDate = dateStr;
+    state.newTime = ''; state.newDateDisplay = '';
+    renderCalendar();
+    renderTimeSlots(dateStr);
+    updateCalSummary();
+  }
+
+  function renderTimeSlots(dateStr) {
+    var booked = state.student.bookedSlots || [];
+    var isAbsentDay = (dateStr === state.absentDate);
+    var parts = dateStr.split('/');
+    var dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var isMyRegularDay = (dObj.getDay() === DAY_MAP[state.student.regularDay]);
+    var slots = state.slots.filter(function(s) {
+      if (s.date !== dateStr) return false;
+      var k = s.date + '_' + s.time;
+      if (booked.indexOf(k) >= 0 || s.remaining <= 0) return false;
+      if (isMyRegularDay && s.time === state.student.regularTime) return false;
+      return true;
+    });
+    var container = document.getElementById('calTimeSlots');
+    if (slots.length === 0) { container.innerHTML = ''; return; }
+
+    var dateLabel = formatDateLabel(dateStr) + (isAbsentDay ? '（同じ日の別時間）' : '');
+
+    if (slots.length === 1) {
+      state.newTime = slots[0].time;
+      state.newDateDisplay = dateLabel + ' ' + slots[0].time;
+      container.innerHTML = '<div class="cal-slots">' +
+        '<div class="cal-slots-title">' + dateLabel + ' の時間（残り ' + slots[0].remaining + ' 枠）</div>' +
+        '<div class="cal-slot-grid"><button class="cal-slot-btn selected">' + slots[0].time + '</button></div>' +
+      '</div>';
+      renderCalendar();
+      updateCalSummary();
+      return;
+    }
+
+    var slotsHtml = slots.map(function(s) {
+      var sel = (state.newTime === s.time) ? ' selected' : '';
+      return '<button class="cal-slot-btn' + sel + '" onclick="selectCalTime(\'' + s.time + '\',' + s.remaining + ')">' +
+        s.time + '<span class="cal-slot-remaining">残り ' + s.remaining + ' 枠</span></button>';
+    }).join('');
+    container.innerHTML = '<div class="cal-slots">' +
+      '<div class="cal-slots-title">' + dateLabel + ' の時間を選んでください</div>' +
+      '<div class="cal-slot-grid">' + slotsHtml + '</div>' +
+    '</div>';
+  }
+
+  function selectCalTime(time, remaining) {
+    state.newTime = time;
+    state.newDateDisplay = formatDateLabel(state.newDate) + ' ' + time;
+    renderTimeSlots(state.newDate);
+    renderCalendar();
+    updateCalSummary();
+  }
+
+  function updateCalSummary() {
+    var absEl = document.getElementById('calSummaryAbsent');
+    var makEl = document.getElementById('calSummaryMakeup');
+    var absIcon = document.getElementById('calSummaryAbsentIcon');
+    var makIcon = document.getElementById('calSummaryMakeupIcon');
+    var btn = document.getElementById('calProceedBtn');
+
+    if (state.absentDate) {
+      absEl.textContent = state.absentDateDisplay;
+      absEl.classList.remove('empty');
+      absIcon.className = 'cal-summary-icon absent';
+    } else {
+      absEl.textContent = '未選択';
+      absEl.classList.add('empty');
+      absIcon.className = 'cal-summary-icon empty';
+    }
+    if (state.newDate && state.newTime) {
+      makEl.textContent = state.newDateDisplay;
+      makEl.classList.remove('empty');
+      makIcon.className = 'cal-summary-icon makeup';
+      btn.disabled = false;
+      btn.textContent = 'この内容で確認する';
+    } else if (state.newDate) {
+      makEl.textContent = '時間を選んでください';
+      makEl.classList.add('empty');
+      makIcon.className = 'cal-summary-icon empty';
+      btn.disabled = true;
+      btn.textContent = '時間枠を選んでください';
+    } else {
+      makEl.textContent = '未選択';
+      makEl.classList.add('empty');
+      makIcon.className = 'cal-summary-icon empty';
+      btn.disabled = true;
+      btn.textContent = state.absentDate ? '振替先を選んでください' : 'お休みする日を選んでください';
+    }
+  }
+
+  function changeCalMonth(delta) {
+    var d = new Date(state.calViewMonth);
+    d.setMonth(d.getMonth() + delta);
+    state.calViewMonth = d;
+    renderCalendar();
+  }
+
+  function proceedFromCalendar() {
+    if (!state.absentDate || !state.newDate || !state.newTime) return;
+    document.getElementById('cfName').textContent = state.student.name;
+    document.getElementById('cfAbsent').textContent = state.absentDateDisplay;
+    document.getElementById('cfNew').textContent = state.newDateDisplay;
+    showScreen(3);
+  }
+
+  // ============================================================
+  // STEP 3: 確定（実API）
+  // ============================================================
+  function doSubmit() {
+    if (!state.student || !state.absentDate || !state.newDate || !state.newTime) {
+      alert('入力に不備があります。最初からやり直してください。');
+      return;
+    }
+    var btn = document.getElementById('submitBtn');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '処理中...';
+
+    callApi('submitReschedule', {
+      sid: state.student.sid,
+      absentDate: state.absentDate,
+      newDate: state.newDate,
+      newTime: state.newTime
+    }).then(function(res) {
+      if (!res || !res.ok) {
+        btn.disabled = false; btn.textContent = 'この内容で確定する';
+        alert('送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認のうえ、もう一度お試しください。'));
+        return;
+      }
+      if (!res.data || !res.data.success) {
+        btn.disabled = false; btn.textContent = 'この内容で確定する';
+        alert((res.data && res.data.message) ? res.data.message : '予約できませんでした。最初からやり直してください。');
+        return;
+      }
+      // 成功：ローカル状態を更新（再表示時の整合）
+      state.student.rescheduledDates.push(state.absentDate);
+      state.student.bookedSlots.push(state.newDate + '_' + state.newTime);
+      var raw = findStudent(state.student.sid);
+      if (raw) {
+        raw.bookings = raw.bookings || [];
+        raw.bookings.push({
+          absentDate: state.absentDate, absentTime: state.student.regularTime,
+          newDate: state.newDate, newTime: state.newTime, bookingType: 'makeup'
+        });
+      }
+      document.getElementById('successDetail').innerHTML =
+        '<div class="confirm-row"><span class="confirm-label">お名前</span><span class="confirm-value">' + state.student.name + '</span></div>' +
+        '<div class="confirm-row"><span class="confirm-label">お休み</span><span class="confirm-value">' + state.absentDateDisplay + '</span></div>' +
+        '<div class="confirm-row"><span class="confirm-label">振替先</span><span class="confirm-value">' + state.newDateDisplay + '</span></div>';
+      // 完了画面を振替用の表示に戻す（フリー流用で書き換わっている場合の保険）
+      var sm = document.querySelector('#screen4 .success-msg');
+      if (sm) sm.textContent = '振替予約が完了しました';
+      var rb = document.querySelector('#screen4 .btn-secondary');
+      if (rb) rb.style.display = '';
+      showScreen(4);
+      btn.disabled = false;
+      btn.textContent = 'この内容で確定する';
+    }).catch(function(err) {
+      btn.disabled = false; btn.textContent = 'この内容で確定する';
+      alert('エラー：' + (err && err.message ? err.message : String(err)));
+    });
+  }
+
+  // ============================================================
+  // ナビ
+  // ============================================================
+  function resetAll() {
+    state.absentDate = state.absentDateDisplay = '';
+    state.newDate = state.newTime = state.newDateDisplay = '';
+    state.calStep = 'absent';
+    hideError('calError');
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('submitBtn').textContent = 'この内容で確定する';
+
+    if (state.mode === 'siblings' && state.students.length > 1) {
+      renderSiblingList(state.students);
+      showScreenById('screenSibling');
+    } else if (state.student) {
+      // 最新の空き枠・予約状況を取り直して再開
+      selectStudentBySid(state.student.sid);
+    }
+  }
+
+  // ============================================================
+  // ユーティリティ
+  // ============================================================
+  function formatDate(date) {
+    var y = date.getFullYear();
+    var m = ('0' + (date.getMonth() + 1)).slice(-2);
+    var d = ('0' + date.getDate()).slice(-2);
+    return y + '/' + m + '/' + d;
+  }
+  function formatDateLabel(dateStr) {
+    var parts = dateStr.split('/');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    return parseInt(parts[1]) + '/' + parseInt(parts[2]) + '（' + DAY_NAMES[d.getDay()] + '）';
+  }
+
+  // ============================================================
+  // 起動
+  // ============================================================
+  boot();
+
+</script>
+
+</body>
+</html>
