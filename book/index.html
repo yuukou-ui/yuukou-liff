@@ -755,14 +755,26 @@
       showFatal('通信環境の問題でうまく開けませんでした。電波の良い場所でもう一度お試しください。');
       return;
     }
-    liff.init({ liffId: LIFF_ID }).then(function() {
+    var _t0 = Date.now();
+    dbg('init開始…');
+    var _initTimeout = new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error('LIFF初期化が15秒で応答しません。LINEを完全に終了して開き直すか、Wi-Fi⇄モバイル回線を切替えてお試しください。'));
+      }, 15000);
+    });
+    Promise.race([ liff.init({ liffId: LIFF_ID }), _initTimeout ]).then(function() {
+      dbg('init完了 ' + ((Date.now() - _t0) / 1000).toFixed(1) + 's');
       setStatus('② ログイン確認中…');
-      if (!liff.isLoggedIn()) { liff.login(); return null; }
+      if (!liff.isLoggedIn()) { dbg('未ログイン→login()'); liff.login(); return null; }
       setStatus('③ 通行証を取得中…');
       state.token = liff.getAccessToken();
       if (!state.token) throw new Error('アクセストークンが取得できませんでした');
       setStatus('④ 生徒情報を確認中…');
-      return callApi('myBookings');
+      var _tApi = Date.now();
+      return callApi('myBookings').then(function(res) {
+        dbg('API応答 ' + ((Date.now() - _tApi) / 1000).toFixed(1) + 's: ' + JSON.stringify(res).slice(0, 80));
+        return res;
+      });
     }).then(function(res) {
       if (!res) return; // login() でリダイレクト中
       dbg('応答: ' + JSON.stringify(res).slice(0, 120));
