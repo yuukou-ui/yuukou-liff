@@ -462,6 +462,22 @@
     }
 
     .dbg { margin-top: 14px; font-size: 11px; color: #c4bdb4; text-align: center; word-break: break-all; }
+
+    /* ホーム：予約確認＋キャンセル */
+    .home-empty { color: var(--text-light); text-align: center; padding: 24px 8px; font-size: 15px; }
+    .home-booking {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px; border: 1px solid var(--border); border-radius: 12px;
+      margin-bottom: 12px; background: var(--card);
+    }
+    .home-booking-info { flex: 1; min-width: 0; }
+    .home-booking-absent { font-weight: 700; color: var(--text); font-size: 15px; }
+    .home-booking-new { color: var(--text-light); font-size: 13px; margin-top: 4px; }
+    .home-cancel-btn {
+      flex: none; border: 1px solid var(--red); color: var(--red); background: var(--red-bg);
+      border-radius: 10px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .home-cancel-btn:active { opacity: 0.7; }
   </style>
 </head>
 <body>
@@ -498,6 +514,17 @@
       <h2>誰の振替予約ですか？</h2>
       <p class="subtitle">お子さまを選んでください。</p>
       <div id="siblingList"></div>
+    </div>
+  </div>
+
+  <!-- ホーム：予約確認＋キャンセル（通常型） -->
+  <div class="screen" id="screenHome">
+    <div class="card">
+      <h2 id="homeGreeting"></h2>
+      <p class="subtitle">現在の振替予約です。新しく予約することもできます。</p>
+      <div id="homeBookings"></div>
+      <button class="btn btn-primary" onclick="goToNewBooking()">新しく振替を予約する</button>
+      <button class="btn btn-back" id="homeBackToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; 別のお子さまを選ぶ</button>
     </div>
   </div>
 
@@ -851,7 +878,11 @@
       }
       state.slots = (res.data && res.data.slots) || [];
       state.student = enrichStudent(raw);
-      startBookingFlow(state.student);
+      if (state.student.classType === 'free') {
+        startBookingFlow(state.student);
+      } else {
+        showHome(state.student);
+      }
     }).catch(function(err) {
       showFatal('エラー：' + (err && err.message ? err.message : String(err)));
     });
@@ -886,6 +917,74 @@
     updateCalSummary();
     renderCalendar();
     showCalendar();
+  }
+
+  // ============================================================
+  // ホーム：予約確認＋キャンセル（通常型のみ）
+  // ============================================================
+  function showHome(student) {
+    var raw = findStudent(student.sid) || {};
+    var bookings = (raw.bookings || []).filter(function(b) { return b.bookingType !== 'free'; });
+    document.getElementById('homeGreeting').textContent = student.name + 'さん、お疲れさまです';
+    var container = document.getElementById('homeBookings');
+    container.innerHTML = '';
+    if (bookings.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'home-empty';
+      empty.textContent = '現在、振替予約はありません。';
+      container.appendChild(empty);
+    } else {
+      bookings.forEach(function(b) {
+        var row = document.createElement('div');
+        row.className = 'home-booking';
+        var info = document.createElement('div');
+        info.className = 'home-booking-info';
+        info.innerHTML = '<div class="home-booking-absent">' + b.absentDate + ' のお休み</div>' +
+          '<div class="home-booking-new">振替先：' + b.newDate + '　' + b.newTime + '</div>';
+        var btn = document.createElement('button');
+        btn.className = 'home-cancel-btn';
+        btn.textContent = 'キャンセル';
+        btn.onclick = (function(ad) { return function() { cancelBooking(ad); }; })(b.absentDate);
+        row.appendChild(info);
+        row.appendChild(btn);
+        container.appendChild(row);
+      });
+    }
+    document.getElementById('homeBackToSiblingBtn').style.display =
+      (state.students && state.students.length > 1) ? 'block' : 'none';
+    for (var i = 1; i <= 3; i++) { document.getElementById('step' + i).className = 'step-item'; }
+    showScreenById('screenHome');
+  }
+
+  function goToNewBooking() {
+    if (!state.student) { showFatal('生徒情報が見つかりませんでした。'); return; }
+    startBookingFlow(state.student);
+  }
+
+  function cancelBooking(absentDate) {
+    if (!state.student) return;
+    if (!confirm(absentDate + ' のお休みの振替予約をキャンセルします。よろしいですか？')) return;
+    var sid = state.student.sid;
+    showLoading('キャンセルしています…');
+    callApi('cancelReschedule', { sid: sid, absentDate: absentDate }).then(function(res) {
+      if (!res || !res.ok || !res.data || !res.data.success) {
+        var msg = (res && res.data && res.data.message) ? res.data.message
+          : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
+        alert('キャンセルできませんでした' + msg);
+        showHome(state.student);
+        return;
+      }
+      var raw = findStudent(sid);
+      if (raw && raw.bookings) {
+        raw.bookings = raw.bookings.filter(function(b) {
+          return !(b.bookingType !== 'free' && b.absentDate === absentDate);
+        });
+      }
+      selectStudentBySid(sid);
+    }).catch(function(err) {
+      alert('エラー：' + (err && err.message ? err.message : String(err)));
+      showHome(state.student);
+    });
   }
 
   // ============================================================
