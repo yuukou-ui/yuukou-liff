@@ -741,8 +741,18 @@
     }).then(function(r){ return r.json(); });
   }
 
+  // 登録リンクの token を取得（LIFFは付与クエリを liff.state にurlencode格納することがある）
+  function getRegToken() {
+    function pick(qs){ try { return new URLSearchParams(qs).get('token'); } catch(e){ return null; } }
+    var t = pick(location.search);
+    if (t) return t;
+    var st = new URLSearchParams(location.search).get('liff.state');
+    if (st) { try { return pick(decodeURIComponent(st)); } catch(e){} }
+    return null;
+  }
+
   function setStatus(s){ var el = document.getElementById('loadingText'); if (el) el.textContent = s; }
-  var DEBUG = false; // 本番は false（画面下の診断JSON行を非表示）。調査時だけ true に。
+  var DEBUG = true; // ★登録フロー実機検証中は true（画面下の診断行を表示）。確認OK後は false に戻す。
   function dbg(s){ if (!DEBUG) return; var el = document.getElementById('dbg'); if (el) el.textContent = s; }
 
   // ============================================================
@@ -861,18 +871,32 @@
       setStatus('③ 通行証を取得中…');
       state.token = liff.getAccessToken();
       if (!state.token) throw new Error('アクセストークンが取得できませんでした');
-      setStatus('④ 生徒情報を確認中…');
-      var _tApi = Date.now();
-      return callApi('myBookings').then(function(res) {
-        dbg('API応答 ' + ((Date.now() - _tApi) / 1000).toFixed(1) + 's: ' + JSON.stringify(res).slice(0, 80));
-        return res;
+      // --- 初回登録：登録リンクの token があれば先に紐付け ---
+      var regToken = getRegToken();
+      var _pre = Promise.resolve(null);
+      if (regToken) {
+        setStatus('④ 登録を確認中…');
+        dbg('token検出→linkByToken');
+        _pre = callApi('linkByToken', { token: regToken }).then(function(lr){
+          dbg('link応答: ' + JSON.stringify(lr).slice(0, 80));
+          if (lr.ok && lr.data && lr.data.success === false) state._linkMsg = lr.data.message;
+          return null;
+        });
+      }
+      return _pre.then(function(){
+        setStatus((regToken ? '⑤' : '④') + ' 生徒情報を確認中…');
+        var _tApi = Date.now();
+        return callApi('myBookings').then(function(res) {
+          dbg('API応答 ' + ((Date.now() - _tApi) / 1000).toFixed(1) + 's: ' + JSON.stringify(res).slice(0, 80));
+          return res;
+        });
       });
     }).then(function(res) {
       if (!res) return; // login() でリダイレクト中
       dbg('応答: ' + JSON.stringify(res).slice(0, 120));
       if (!res.ok) { showFatal('読み込みに失敗しました（' + res.error + '）'); return; }
       if (!res.data.linked) {
-        showFatal('このLINEはまだ生徒登録と紐付いていません。先生から届いた登録リンクを先に開いてください。');
+        showFatal(state._linkMsg || 'このLINEはまだ生徒登録と紐付いていません。先生から届いた登録リンクを先に開いてください。');
         return;
       }
       state.students = res.data.students || [];
