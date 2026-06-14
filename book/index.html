@@ -742,7 +742,8 @@
   }
 
   function setStatus(s){ var el = document.getElementById('loadingText'); if (el) el.textContent = s; }
-  function dbg(s){ document.getElementById('dbg').textContent = s; }
+  var DEBUG = false; // 本番は false（画面下の診断JSON行を非表示）。調査時だけ true に。
+  function dbg(s){ if (!DEBUG) return; var el = document.getElementById('dbg'); if (el) el.textContent = s; }
 
   // ============================================================
   // 画面切り替え
