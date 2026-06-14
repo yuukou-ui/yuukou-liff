@@ -478,6 +478,24 @@
       border-radius: 10px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
     }
     .home-cancel-btn:active { opacity: 0.7; }
+
+    /* 自前ポップアップ（標準alert/confirmの代替） */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; z-index: 1000; padding: 24px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 16px; max-width: 340px; width: 100%;
+      padding: 24px 20px 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+    .modal-title { font-weight: 700; font-size: 16px; color: var(--navy); text-align: center; margin-bottom: 10px; }
+    .modal-message { font-size: 15px; color: var(--text); text-align: center; line-height: 1.7; margin-bottom: 20px; white-space: pre-wrap; }
+    .modal-actions { display: flex; gap: 10px; }
+    .modal-actions button { flex: 1; border: none; border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .modal-btn-cancel { background: var(--border-soft); color: var(--text); }
+    .modal-btn-ok { background: var(--blue); color: #fff; }
+    .modal-btn-danger { background: var(--red); color: #fff; }
   </style>
 </head>
 <body>
@@ -663,6 +681,15 @@
     </div>
   </div>
 
+  <!-- 自前ポップアップ（標準alert/confirmの代替・ドメイン名を出さない） -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <div class="modal-title" id="modalTitle">優光書道教室</div>
+      <div class="modal-message" id="modalMessage"></div>
+      <div class="modal-actions" id="modalActions"></div>
+    </div>
+  </div>
+
   <div id="dbg" class="dbg"></div>
 
 </div>
@@ -772,6 +799,43 @@
     el.style.display = 'block';
   }
   function hideError(id) { document.getElementById(id).style.display = 'none'; }
+
+  // 自前ポップアップ（標準 alert/confirm の代替。ドメイン名を出さない）
+  function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
+  function uiAlert(message, title) {
+    return new Promise(function(resolve) {
+      document.getElementById('modalTitle').textContent = title || '優光書道教室';
+      document.getElementById('modalMessage').textContent = message;
+      var actions = document.getElementById('modalActions');
+      actions.innerHTML = '';
+      var ok = document.createElement('button');
+      ok.className = 'modal-btn-ok';
+      ok.textContent = 'OK';
+      ok.onclick = function() { closeModal(); resolve(); };
+      actions.appendChild(ok);
+      document.getElementById('modalOverlay').classList.add('active');
+    });
+  }
+  function uiConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise(function(resolve) {
+      document.getElementById('modalTitle').textContent = opts.title || '優光書道教室';
+      document.getElementById('modalMessage').textContent = message;
+      var actions = document.getElementById('modalActions');
+      actions.innerHTML = '';
+      var cancel = document.createElement('button');
+      cancel.className = 'modal-btn-cancel';
+      cancel.textContent = opts.cancelText || 'やめる';
+      cancel.onclick = function() { closeModal(); resolve(false); };
+      var ok = document.createElement('button');
+      ok.className = opts.danger ? 'modal-btn-danger' : 'modal-btn-ok';
+      ok.textContent = opts.okText || 'OK';
+      ok.onclick = function() { closeModal(); resolve(true); };
+      actions.appendChild(cancel);
+      actions.appendChild(ok);
+      document.getElementById('modalOverlay').classList.add('active');
+    });
+  }
 
   // ============================================================
   // 起動：LIFF → トークン → myBookings で生徒リスト取得
@@ -963,27 +1027,30 @@
 
   function cancelBooking(absentDate) {
     if (!state.student) return;
-    if (!confirm(absentDate + ' のお休みの振替予約をキャンセルします。よろしいですか？')) return;
-    var sid = state.student.sid;
-    showLoading('キャンセルしています…');
-    callApi('cancelReschedule', { sid: sid, absentDate: absentDate }).then(function(res) {
-      if (!res || !res.ok || !res.data || !res.data.success) {
-        var msg = (res && res.data && res.data.message) ? res.data.message
-          : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
-        alert('キャンセルできませんでした' + msg);
+    uiConfirm(absentDate + ' のお休みの振替予約をキャンセルします。よろしいですか？',
+      { okText: 'キャンセルする', cancelText: 'やめる', danger: true }).then(function(yes) {
+      if (!yes) return;
+      var sid = state.student.sid;
+      showLoading('キャンセルしています…');
+      callApi('cancelReschedule', { sid: sid, absentDate: absentDate }).then(function(res) {
+        if (!res || !res.ok || !res.data || !res.data.success) {
+          var msg = (res && res.data && res.data.message) ? res.data.message
+            : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
+          showHome(state.student);
+          uiAlert('キャンセルできませんでした' + msg);
+          return;
+        }
+        var raw = findStudent(sid);
+        if (raw && raw.bookings) {
+          raw.bookings = raw.bookings.filter(function(b) {
+            return !(b.bookingType !== 'free' && b.absentDate === absentDate);
+          });
+        }
+        selectStudentBySid(sid);
+      }).catch(function(err) {
         showHome(state.student);
-        return;
-      }
-      var raw = findStudent(sid);
-      if (raw && raw.bookings) {
-        raw.bookings = raw.bookings.filter(function(b) {
-          return !(b.bookingType !== 'free' && b.absentDate === absentDate);
-        });
-      }
-      selectStudentBySid(sid);
-    }).catch(function(err) {
-      alert('エラー：' + (err && err.message ? err.message : String(err)));
-      showHome(state.student);
+        uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
+      });
     });
   }
 
@@ -1118,11 +1185,13 @@
   function handleFreeDayTap(dateStr, dateObj) {
     var existing = state.freeBookings.filter(function(b) { return b.date === dateStr; })[0];
     if (existing) {
-      if (confirm((dateObj.getMonth()+1) + '月' + dateObj.getDate() + '日 ' + existing.time + ' の予約をキャンセルしますか？')) {
+      uiConfirm((dateObj.getMonth()+1) + '月' + dateObj.getDate() + '日 ' + existing.time + ' の予約をキャンセルしますか？',
+        { okText: 'キャンセルする', cancelText: 'やめる', danger: true }).then(function(yes) {
+        if (!yes) return;
         state.freeBookings = state.freeBookings.filter(function(b) { return b.date !== dateStr; });
         renderFreeCalendar();
         renderFreeBookingsSummary();
-      }
+      });
       return;
     }
     if (state.freeBookings.length >= FREE_MAX) {
@@ -1561,7 +1630,7 @@
   // ============================================================
   function doSubmit() {
     if (!state.student || !state.absentDate || !state.newDate || !state.newTime) {
-      alert('入力に不備があります。最初からやり直してください。');
+      uiAlert('入力に不備があります。最初からやり直してください。');
       return;
     }
     var btn = document.getElementById('submitBtn');
@@ -1577,12 +1646,12 @@
     }).then(function(res) {
       if (!res || !res.ok) {
         btn.disabled = false; btn.textContent = 'この内容で確定する';
-        alert('送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認のうえ、もう一度お試しください。'));
+        uiAlert('送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認のうえ、もう一度お試しください。'));
         return;
       }
       if (!res.data || !res.data.success) {
         btn.disabled = false; btn.textContent = 'この内容で確定する';
-        alert((res.data && res.data.message) ? res.data.message : '予約できませんでした。最初からやり直してください。');
+        uiAlert((res.data && res.data.message) ? res.data.message : '予約できませんでした。最初からやり直してください。');
         return;
       }
       // 成功：ローカル状態を更新（再表示時の整合）
@@ -1610,7 +1679,7 @@
       btn.textContent = 'この内容で確定する';
     }).catch(function(err) {
       btn.disabled = false; btn.textContent = 'この内容で確定する';
-      alert('エラー：' + (err && err.message ? err.message : String(err)));
+      uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
     });
   }
 
