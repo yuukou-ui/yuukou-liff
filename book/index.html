@@ -636,7 +636,7 @@
       <p class="subtitle">月3回まで、ご希望の日をカレンダーから選んでください。</p>
 
       <div class="free-summary">
-        <div class="free-summary-title">📅 <span id="freeMonthLabel"></span>の予約状況</div>
+        <div class="free-summary-title">📅 ご予約の状況</div>
         <div class="free-summary-count">
           <span id="freeBookedCount">0</span> / 3 日 予約中
         </div>
@@ -1147,7 +1147,13 @@
     var view = state.freeCalViewMonth;
     var year = view.getFullYear(), month = view.getMonth();
     document.getElementById('freeCalMonthLabel').textContent = year + '年' + (month + 1) + '月';
-    document.getElementById('freeMonthLabel').textContent = (month + 1) + '月';
+
+    // 月送りの範囲：今月〜2ヶ月先（予約枠データが無い月へ迷い込まないように）
+    var navToday = new Date();
+    var navMin = new Date(navToday.getFullYear(), navToday.getMonth(), 1);
+    var navMax = new Date(navToday.getFullYear(), navToday.getMonth() + 2, 1);
+    document.getElementById('freeCalPrevBtn').disabled = (view.getTime() <= navMin.getTime());
+    document.getElementById('freeCalNextBtn').disabled = (view.getTime() >= navMax.getTime());
 
     var firstDow = new Date(year, month, 1).getDay();
     var lastDate = new Date(year, month + 1, 0).getDate();
@@ -1346,6 +1352,8 @@
         ? 'すべての予約をキャンセルしました。'
         : '以下の' + sorted.length + '日で予約しました：\n' + lines.join('\n');
       document.querySelector('#screen4 .success-msg').textContent = sorted.length === 0 ? 'キャンセル完了' : 'ご予約が完了しました';
+      // textContent の '\n' は表示されないため pre-line で改行を効かせる
+      document.getElementById('successDetail').style.whiteSpace = 'pre-line';
       document.getElementById('successDetail').textContent = msg;
       var retryBtn = document.querySelector('#screen4 .btn-secondary');
       if (retryBtn) retryBtn.style.display = 'none';
@@ -1699,6 +1707,7 @@
       if (sm) sm.textContent = '振替予約が完了しました';
       var rb = document.querySelector('#screen4 .btn-secondary');
       if (rb) rb.style.display = '';
+      document.getElementById('successDetail').style.whiteSpace = '';
       showScreen(4);
       btn.disabled = false;
       btn.textContent = 'この内容で確定する';
