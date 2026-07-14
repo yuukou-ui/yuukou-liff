@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>優光書道教室 振替予約 管理</title>
+<!-- ホーム画面に追加したときのアイコン（Mac版アプリと同じ絵柄） -->
+<link rel="apple-touch-icon" sizes="512x512" href="icon.png">
+<link rel="icon" href="icon.png">
+<meta name="apple-mobile-web-app-title" content="振替予約 管理">
+<style>
+  :root { --navy:#1a2940; --blue:#2563eb; --bg:#f7f5f1; --gray:#6b7280; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
+    background:var(--bg); color:#1f2937; -webkit-font-smoothing:antialiased; min-height:100vh; }
+  .wrap { max-width:560px; margin:0 auto; padding:22px 16px 44px; }
+  .hdr { background:linear-gradient(135deg,#1a2940,#2563eb); color:#fff; border-radius:18px;
+    padding:24px 22px; margin-bottom:18px; box-shadow:0 3px 14px rgba(26,41,64,.22); }
+  .hdr-brand { font-size:12px; opacity:.9; letter-spacing:2px; font-weight:600; }
+  .hdr h1 { font-size:21px; font-weight:800; margin-top:6px; }
+  .addhint { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:12px;
+    padding:12px 14px; font-size:13px; line-height:1.7; margin-bottom:16px; }
+  .addhint b { color:#b45309; }
+  .big-btn { display:flex; align-items:center; gap:15px; width:100%; text-align:left; background:#fff;
+    border:none; border-radius:16px; padding:18px 20px; margin-bottom:12px; font-family:inherit;
+    font-size:17px; font-weight:800; color:var(--navy); box-shadow:0 2px 10px rgba(0,0,0,.07);
+    cursor:pointer; text-decoration:none; -webkit-tap-highlight-color:transparent; }
+  .big-btn:active { transform:scale(.99); }
+  .big-btn .icon { width:50px; height:50px; border-radius:14px; flex-shrink:0; display:flex;
+    align-items:center; justify-content:center; font-size:25px; }
+  .icon.admin { background:linear-gradient(135deg,#1a2940,#2563eb); }
+  .icon.sheet { background:linear-gradient(135deg,#15803d,#22c55e); }
+  .icon.line  { background:linear-gradient(135deg,#059669,#10b981); }
+  .big-btn .main { flex:1; }
+  .big-btn .sub { display:block; font-size:12px; font-weight:500; color:var(--gray); margin-top:3px; }
+  .big-btn .arrow { color:#9ca3af; font-size:20px; }
+  .help { background:#fff; border-radius:16px; padding:16px 18px; margin-top:20px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .help h2 { font-size:14px; font-weight:800; color:var(--navy); margin-bottom:10px; }
+  .help-row { display:flex; gap:10px; padding:8px 0; border-top:1px solid #f3f4f6; font-size:13px; line-height:1.6; }
+  .help-row:first-of-type { border-top:none; }
+  .help-what { min-width:96px; font-weight:700; color:var(--navy); flex-shrink:0; }
+  .help-how b { color:var(--blue); }
+  .foot { text-align:center; font-size:11px; color:#9ca3af; margin-top:22px; line-height:1.8; }
+  .foot a { color:var(--blue); text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="hdr-brand">優光書道教室</div>
+    <h1>🖌️ 振替予約 管理</h1>
+  </div>
+
+  <div class="addhint">
+    📱 <b>初回だけ</b>：画面下（または上）の共有ボタン<b>（□に↑）</b>→「<b>ホーム画面に追加</b>」をタップ。<br>
+    次からはホーム画面のアイコンから、パソコンと同じ画面で使えます。
+  </div>
+
+  <a class="big-btn" href="#" onclick="openAdmin(); return false;">
+    <span class="icon admin">🖥</span>
+    <span class="main">管理画面をひらく
+      <span class="sub">予約の確認・開講日づくり・お知らせ送信</span>
+    </span>
+    <span class="arrow">›</span>
+  </a>
+
+  <a class="big-btn" href="#" onclick="openSheet(); return false;">
+    <span class="icon sheet">📊</span>
+    <span class="main">予約データ表（スプレッドシート）
+      <span class="sub">生徒の名簿・登録リンクの発行</span>
+    </span>
+    <span class="arrow">›</span>
+  </a>
+
+  <a class="big-btn" href="https://manager.line.biz/" target="_blank" rel="noopener">
+    <span class="icon line">💬</span>
+    <span class="main">LINE公式アカウント管理
+      <span class="sub">生徒とのやりとり・リッチメニュー</span>
+    </span>
+    <span class="arrow">›</span>
+  </a>
+
+  <div class="help">
+    <h2>📌 よく使う操作（管理画面の中）</h2>
+    <div class="help-row"><span class="help-what">予約を確認</span><span class="help-how"><b>振替記録</b>タブ。</span></div>
+    <div class="help-row"><span class="help-what">開講日を作る</span><span class="help-how"><b>開講日設定</b>タブ → 自動生成 → <b>🚀 公開する</b>（公開しないと生徒は予約できません）。</span></div>
+    <div class="help-row"><span class="help-what">お知らせ送信</span><span class="help-how"><b>通知</b>タブ。</span></div>
+  </div>
+
+  <div class="foot">
+    スプレッドシートのリンクを変えるとき <a href="#" onclick="changeSheetUrl(); return false;">URLを再設定</a>
+  </div>
+
+</div>
+
+<script>
+  var ADMIN_URL = 'https://script.google.com/macros/s/AKfycbzyCJJ3IfXpPluaZ6LQqjeDKlhu0amXLvp8fCv59CxIMMl0ic8SjuqbtIsbhwbZ_6S8/exec?page=admin';
+
+  function openAdmin() { window.open(ADMIN_URL, '_blank'); }
+
+  function openSheet() {
+    var url = localStorage.getItem('kanri_sheet_url');
+    if (url) { window.open(url, '_blank'); return; }
+    var input = prompt('はじめてなので、スプレッドシートのURLを一度だけ登録します。\n\nGoogleドライブで「振替予約」のスプレッドシートを開き、URLをコピーして貼り付けてください。\n（次からはボタンだけで開きます）');
+    if (input && input.trim()) {
+      localStorage.setItem('kanri_sheet_url', input.trim());
+      window.open(input.trim(), '_blank');
+    }
+  }
+
+  function changeSheetUrl() {
+    var cur = localStorage.getItem('kanri_sheet_url') || '';
+    var input = prompt('スプレッドシートのURLを貼り付けてください。', cur);
+    if (input === null) return;
+    if (input.trim()) { localStorage.setItem('kanri_sheet_url', input.trim()); alert('保存しました。'); }
+  }
+</script>
+</body>
+</html>
