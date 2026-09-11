@@ -530,7 +530,7 @@
   <div class="screen" id="screenSibling">
     <div class="card">
       <h2>誰の振替予約ですか？</h2>
-      <p class="subtitle">お子さまを選んでください。</p>
+      <p class="subtitle">お名前を選んでください。</p>
       <div id="siblingList"></div>
     </div>
   </div>
@@ -542,7 +542,7 @@
       <p class="subtitle">現在の振替予約です。新しく予約することもできます。</p>
       <div id="homeBookings"></div>
       <button class="btn btn-primary" onclick="goToNewBooking()">新しく振替を予約する</button>
-      <button class="btn btn-back" id="homeBackToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; 別のお子さまを選ぶ</button>
+      <button class="btn btn-back" id="homeBackToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; 別のお名前を選ぶ</button>
     </div>
   </div>
 
@@ -586,7 +586,7 @@
 
       <button class="btn btn-primary" id="calProceedBtn" onclick="proceedFromCalendar()" disabled>振替先を選んでください</button>
       <button class="btn btn-back" id="calBackToAbsentBtn" style="display:none;" onclick="handleAbsentTap('')">&#8249; お休み日を選び直す</button>
-      <button class="btn btn-back" id="backToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; お子さまの選択に戻る</button>
+      <button class="btn btn-back" id="backToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; お名前の選択に戻る</button>
     </div>
   </div>
 
@@ -894,21 +894,21 @@
     }).then(function(res) {
       if (!res) return; // login() でリダイレクト中
       dbg('応答: ' + JSON.stringify(res).slice(0, 120));
-      if (!res.ok) { showFatal('読み込みに失敗しました（' + res.error + '）'); return; }
+      if (!res.ok) { showFatal('読み込みに失敗しました。通信環境の良い場所で、もう一度開いてみてください。（' + res.error + '）'); return; }
       if (!res.data.linked) {
-        showFatal(state._linkMsg || 'このLINEはまだ生徒登録と紐付いていません。先生から届いた登録リンクを先に開いてください。');
+        showFatal(state._linkMsg || 'このLINEはまだ生徒登録と紐付いていません。先生から届いた「登録リンク」を先にタップしてください。リンクが見当たらない・期限が切れた場合は、このトークで「登録リンク希望」と送ってください。');
         return;
       }
       state.students = res.data.students || [];
       routeStudents();
     }).catch(function(err) {
-      showFatal('エラー：' + (err && err.message ? err.message : String(err)));
+      showFatal('うまく読み込めませんでした。LINEをいったん閉じて、もう一度開いてみてください。（' + (err && err.message ? err.message : String(err)) + '）');
     });
   }
 
   function routeStudents() {
     if (state.students.length === 0) {
-      showFatal('登録情報が見つかりませんでした。先生にお問い合わせください。');
+      showFatal('登録情報が見つかりませんでした。このトークで「登録リンク希望」と送ってください。');
       return;
     }
     if (state.students.length === 1) {
@@ -962,7 +962,7 @@
     showLoading('予約枠を確認しています…');
     callApi('availableSlots', { sid: sid }).then(function(res) {
       if (!res || !res.ok) {
-        showFatal('予約枠の取得に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認ください。'));
+        showFatal('予約枠を読み込めませんでした。通信環境の良い場所で、もう一度開いてみてください。' + (res ? '（' + res.error + '）' : ''));
         return;
       }
       state.slots = (res.data && res.data.slots) || [];
@@ -973,7 +973,7 @@
         showHome(state.student);
       }
     }).catch(function(err) {
-      showFatal('エラー：' + (err && err.message ? err.message : String(err)));
+      showFatal('うまく読み込めませんでした。LINEをいったん閉じて、もう一度開いてみてください。（' + (err && err.message ? err.message : String(err)) + '）');
     });
   }
 
@@ -1419,7 +1419,15 @@
     var dateStr = formatDate(date);
 
     if (isOther) { cell.classList.add('other'); return cell; }
-    if (date.getTime() < today.getTime()) { cell.classList.add('past'); return cell; }
+    if (date.getTime() < today.getTime()) {
+      cell.classList.add('past');
+      // 過ぎた日は振替対象外。無反応だと「押せない」問い合わせになるので理由を返す
+      if (state.calStep === 'absent' && date.getDay() === myDow) {
+        cell.style.cursor = 'pointer';
+        cell.onclick = showMissedRule;
+      }
+      return cell;
+    }
     if (date.getTime() === today.getTime()) { cell.classList.add('today'); }
 
     var dow = date.getDay();
@@ -1444,6 +1452,8 @@
         var isTodayCell = (date.getTime() === today.getTime());
         if (isTodayCell && isPastRegularStart(state.student.regularTime)) {
           cell.classList.add('past');
+          cell.style.cursor = 'pointer';
+          cell.onclick = showMissedRule;
           return cell;
         }
         if (isRescheduled) {
@@ -1524,7 +1534,13 @@
     return nowSec >= startSec;
   }
 
+  // 過ぎたお稽古は振替の対象外（お休みのご連絡が無かった場合と同じ扱い）
+  function showMissedRule() {
+    showError('calError', 'お稽古が始まってからのご連絡と、過ぎた日のお稽古は、振替のご予約ができません。お休みが決まりましたら、お稽古が始まる前までにご登録をお願いします。');
+  }
+
   function handleAbsentTap(dateStr) {
+    hideError('calError');
     if (!dateStr) {
       state.absentDate = ''; state.absentDateDisplay = '';
       state.newDate = ''; state.newTime = ''; state.newDateDisplay = '';
