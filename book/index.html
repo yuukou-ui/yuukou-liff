@@ -896,7 +896,7 @@
       dbg('応答: ' + JSON.stringify(res).slice(0, 120));
       if (!res.ok) { showFatal('読み込みに失敗しました。通信環境の良い場所で、もう一度開いてみてください。（' + res.error + '）'); return; }
       if (!res.data.linked) {
-        showFatal(state._linkMsg || 'このLINEはまだ生徒登録と紐付いていません。先生から届いた「登録リンク」を先にタップしてください。リンクが見当たらない・期限が切れた場合は、このトークで「登録リンク希望」と送ってください。');
+        showFatal(state._linkMsg || 'このLINEはまだ生徒登録と紐付いていません。先生から届いた「登録リンク」を先にタップしてください。リンクが見当たらない場合は、このトークで「登録リンク希望」と送ってください。');
         return;
       }
       state.students = res.data.students || [];
