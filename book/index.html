@@ -479,6 +479,32 @@
     }
     .home-cancel-btn:active { opacity: 0.7; }
 
+    /* ホーム：振替先が未定のお休み（①お休みだけ登録） */
+    .home-section-title { font-size: 12px; font-weight: 700; color: var(--text-light); margin: 6px 0 8px; letter-spacing: .5px; }
+    .home-pending { border-color: #fcd34d; background: #fffbeb; flex-wrap: wrap; }
+    .home-pending .home-booking-info { flex: 1 1 100%; }
+    .home-pending-deadline { font-size: 13px; margin-top: 5px; color: var(--orange); font-weight: 700; }
+    .home-pending-deadline.soon { color: var(--red); }
+    .home-pending-note { font-size: 11px; color: #92400e; margin-top: 4px; line-height: 1.5; }
+    .home-pending-actions { display: flex; gap: 8px; flex: 1 1 100%; margin-top: 8px; }
+    .home-pick-btn { flex: 1; border: none; background: var(--navy); color: white; border-radius: 10px; padding: 11px 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .home-pick-btn:active { opacity: 0.8; }
+    .home-expired { border-color: var(--border); background: var(--border-soft); }
+    .home-expired .home-booking-absent { color: var(--gray); text-decoration: line-through; }
+    .home-expired-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--red); background: var(--red-bg); border-radius: 6px; padding: 2px 7px; margin-left: 6px; text-decoration: none; }
+    .home-expired-reason { font-size: 12px; color: var(--text-light); margin-top: 5px; line-height: 1.55; }
+    /* カレンダー：あとで選ぶ／期限外の日 */
+    .btn-later { background: white; color: var(--navy); border: 1.5px solid var(--navy); }
+    .btn-later:active { background: var(--border-soft); }
+    .cal-cell.beyond { opacity: 0.3; cursor: not-allowed; }
+    .cal-cell.beyond .num { color: var(--gray-light); }
+    .cal-deadline-hint { font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 10px; margin: 8px 0 4px; line-height: 1.5; }
+    .cal-deadline-hint b { color: #b45309; }
+    /* 完了画面：期限の注意 */
+    .success-deadline { margin-top: 12px; padding: 12px 14px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; font-size: 14px; color: #78350f; line-height: 1.65; text-align: left; }
+    .success-deadline b { color: #b45309; font-size: 15px; }
+    .success-deadline .warn { display: block; margin-top: 8px; font-size: 12px; color: #92400e; }
+
     /* 自前ポップアップ（標準alert/confirmの代替） */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45);
@@ -551,6 +577,7 @@
     <div class="card">
       <h2 id="studentGreeting"></h2>
       <div class="cal-hint" id="calHint">青枠の日（あなたの通常クラス）をタップして、お休みする日を選んでください</div>
+      <div class="cal-deadline-hint" id="calDeadlineHint" style="display:none;"></div>
 
       <div class="cal-nav">
         <button class="cal-nav-btn" id="calPrevBtn" onclick="changeCalMonth(-1)">‹</button>
@@ -585,7 +612,9 @@
       <div class="error-msg" id="calError"></div>
 
       <button class="btn btn-primary" id="calProceedBtn" onclick="proceedFromCalendar()" disabled>振替先を選んでください</button>
+      <button class="btn btn-later" id="calLaterBtn" style="display:none;" onclick="submitAbsenceOnly()">振替先はあとで選ぶ</button>
       <button class="btn btn-back" id="calBackToAbsentBtn" style="display:none;" onclick="handleAbsentTap('')">&#8249; お休み日を選び直す</button>
+      <button class="btn btn-back" id="calBackHomeBtn" style="display:none;" onclick="backToHome()">&#8249; ホームに戻る</button>
       <button class="btn btn-back" id="backToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; お名前の選択に戻る</button>
     </div>
   </div>
@@ -717,7 +746,8 @@
     freeSelectedDate: null,
     freeCalViewMonth: null,
     calStep: 'absent', // 'absent' | 'makeup' | 'done'
-    calViewMonth: null
+    calViewMonth: null,
+    pendingMode: false // ホームの「振替先を選ぶ」から来た＝お休み日は固定・「あとで選ぶ」は出さない
   };
 
   var DAY_NAMES = ['日','月','火','水','木','金','土'];
@@ -796,7 +826,21 @@
     }
     var backBtn = document.getElementById('calBackToAbsentBtn');
     if (backBtn) {
-      backBtn.style.display = (state.calStep === 'makeup') ? 'block' : 'none';
+      backBtn.style.display = (state.calStep === 'makeup' && !state.pendingMode) ? 'block' : 'none';
+    }
+    var homeBtn = document.getElementById('calBackHomeBtn');
+    if (homeBtn) homeBtn.style.display = (state.calStep === 'makeup' && state.pendingMode) ? 'block' : 'none';
+    // 期限ヒント：振替先を選ぶ段階では常に期限を見せる
+    var hint = document.getElementById('calDeadlineHint');
+    if (hint) {
+      if (state.calStep === 'makeup' && state.absentDate) {
+        var dl = makeupDeadline(state.absentDate);
+        var left = daysLeft(dl);
+        hint.innerHTML = '振替先は <b>' + deadlineLabel(dl) + '</b> までの日から選べます（あと' + Math.max(left, 0) + '日）。' + DEADLINE_WARN;
+        hint.style.display = 'block';
+      } else {
+        hint.style.display = 'none';
+      }
     }
   }
   function showLoading(msg) { setStatus(msg || '確認しています...'); showScreenById('screenLoading'); }
@@ -934,11 +978,13 @@
     var rescheduledDates = [];
     var bookedSlots = [];
     var freeBookings = [];
+    var pendingAbsences = [];
     bookings.forEach(function(b) {
       if (b.bookingType === 'free') {
         if (b.newDate && b.newTime) freeBookings.push({ date: b.newDate, time: b.newTime });
       } else {
         if (b.absentDate) rescheduledDates.push(b.absentDate);
+        if (b.pending) pendingAbsences.push(b.absentDate); // 振替先が未定のお休み
       }
       if (b.newDate && b.newTime) bookedSlots.push(b.newDate + '_' + b.newTime);
     });
@@ -951,7 +997,8 @@
       classType: s.classType || 'regular',
       rescheduledDates: rescheduledDates,
       bookedSlots: bookedSlots,
-      freeBookings: freeBookings
+      freeBookings: freeBookings,
+      pendingAbsences: pendingAbsences
     };
   }
 
@@ -1017,19 +1064,73 @@
     document.getElementById('homeGreeting').textContent = student.name + 'さん、お疲れさまです';
     var container = document.getElementById('homeBookings');
     container.innerHTML = '';
+    var pending = bookings.filter(function(b) { return b.pending; });
+    var confirmed = bookings.filter(function(b) { return !b.pending; });
+
+    // --- 振替先が未定のお休み（①）：期限と残り日数を必ず見せる ---
+    if (pending.length > 0) {
+      var pt = document.createElement('div');
+      pt.className = 'home-section-title';
+      pt.textContent = '振替先が未定のお休み';
+      container.appendChild(pt);
+      pending.forEach(function(b) {
+        var dl = makeupDeadline(b.absentDate);
+        var left = daysLeft(dl);
+        var row = document.createElement('div');
+        var info = document.createElement('div');
+        info.className = 'home-booking-info';
+        if (left < 0) {
+          // 期限切れ：権利消滅。理由を添える（いきなり消さない）
+          row.className = 'home-booking home-expired';
+          info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + ' のお休み' +
+              '<span class="home-expired-tag">期限切れ（' + deadlineLabel(dl) + 'まで）</span></div>' +
+            '<div class="home-expired-reason">' + EXPIRED_REASON + '</div>';
+          row.appendChild(info);
+        } else {
+          row.className = 'home-booking home-pending';
+          var soon = left <= 7;
+          info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + ' のお休み</div>' +
+            '<div class="home-booking-new">振替先：未定</div>' +
+            '<div class="home-pending-deadline' + (soon ? ' soon' : '') + '">期限 ' + deadlineLabel(dl) + '（あと' + left + '日）' + (left <= 3 ? ' ⚠' : '') + '</div>' +
+            '<div class="home-pending-note">' + DEADLINE_WARN + '</div>';
+          var actions = document.createElement('div');
+          actions.className = 'home-pending-actions';
+          var pick = document.createElement('button');
+          pick.className = 'home-pick-btn';
+          pick.textContent = '振替先を選ぶ';
+          pick.onclick = (function(ad) { return function() { pickMakeupFor(ad); }; })(b.absentDate);
+          var cancel = document.createElement('button');
+          cancel.className = 'home-cancel-btn';
+          cancel.textContent = '取り消す';
+          cancel.onclick = (function(ad) { return function() { cancelBooking(ad, true); }; })(b.absentDate);
+          actions.appendChild(pick);
+          actions.appendChild(cancel);
+          row.appendChild(info);
+          row.appendChild(actions);
+        }
+        container.appendChild(row);
+      });
+    }
+
+    if (confirmed.length > 0 && pending.length > 0) {
+      var ct = document.createElement('div');
+      ct.className = 'home-section-title';
+      ct.textContent = '振替予約';
+      container.appendChild(ct);
+    }
     if (bookings.length === 0) {
       var empty = document.createElement('div');
       empty.className = 'home-empty';
       empty.textContent = '現在、振替予約はありません。';
       container.appendChild(empty);
     } else {
-      bookings.forEach(function(b) {
+      confirmed.forEach(function(b) {
         var row = document.createElement('div');
         row.className = 'home-booking';
         var info = document.createElement('div');
         info.className = 'home-booking-info';
-        info.innerHTML = '<div class="home-booking-absent">' + b.absentDate + ' のお休み</div>' +
-          '<div class="home-booking-new">振替先：' + b.newDate + '　' + b.newTime + '</div>';
+        info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + ' のお休み</div>' +
+          '<div class="home-booking-new">振替先：' + formatDateLabel(b.newDate) + '　' + b.newTime + '</div>';
         var btn = document.createElement('button');
         btn.className = 'home-cancel-btn';
         btn.textContent = 'キャンセル';
@@ -1047,13 +1148,42 @@
 
   function goToNewBooking() {
     if (!state.student) { showFatal('生徒情報が見つかりませんでした。'); return; }
+    state.pendingMode = false;
     startBookingFlow(state.student);
   }
 
-  function cancelBooking(absentDate) {
+  // ホームの「振替先を選ぶ」：お休み日を固定して振替先の選択から始める
+  function pickMakeupFor(absentDate) {
     if (!state.student) return;
-    uiConfirm(absentDate + ' のお休みの振替予約をキャンセルします。よろしいですか？',
-      { okText: 'キャンセルする', cancelText: 'やめる', danger: true }).then(function(yes) {
+    state.pendingMode = true;
+    state.absentDate = absentDate;
+    state.absentDateDisplay = formatDateLabel(absentDate) + ' ' + state.student.regularTime;
+    state.newDate = ''; state.newTime = ''; state.newDateDisplay = '';
+    state.calStep = 'makeup';
+    var now = new Date();
+    state.calViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    document.getElementById('studentGreeting').textContent = state.student.name + 'さん、お疲れさまです';
+    document.getElementById('backToSiblingBtn').style.display = 'none';
+    document.getElementById('calHint').className = 'cal-hint makeup';
+    document.getElementById('calHint').textContent = formatDateLabel(absentDate) + ' のお休みの振替先を、緑の日（開講日）から選んでください';
+    document.getElementById('calTimeSlots').innerHTML = '';
+    hideError('calError');
+    updateStepsForCalendar();
+    updateCalSummary();
+    renderCalendar();
+    showCalendar();
+  }
+  function backToHome() {
+    state.pendingMode = false;
+    if (state.student) showHome(state.student);
+  }
+
+  function cancelBooking(absentDate, isPending) {
+    if (!state.student) return;
+    var msg = isPending
+      ? formatDateLabel(absentDate) + ' のお休みの登録を取り消します。よろしいですか？\n（お休みしない場合や、登録を間違えた場合に）'
+      : absentDate + ' のお休みの振替予約をキャンセルします。よろしいですか？';
+    uiConfirm(msg, { okText: isPending ? '取り消す' : 'キャンセルする', cancelText: 'やめる', danger: true }).then(function(yes) {
       if (!yes) return;
       var sid = state.student.sid;
       showLoading('キャンセルしています…');
@@ -1429,6 +1559,12 @@
       return cell;
     }
     if (date.getTime() === today.getTime()) { cell.classList.add('today'); }
+    // 振替先を選ぶ段階：期限（お休みした月の翌月末）より後の日は選べない
+    if (state.calStep !== 'absent' && state.absentDate && dateStr > makeupDeadline(state.absentDate)) {
+      cell.classList.add('beyond');
+      cell.onclick = function() { showError('calError', '振替先は ' + deadlineLabel(makeupDeadline(state.absentDate)) + ' までの日からお選びください。'); };
+      return cell;
+    }
 
     var dow = date.getDay();
     var isMyDay = (dow === myDow);
@@ -1459,6 +1595,12 @@
         if (isRescheduled) {
           cell.classList.add('done');
           addBadge('済');
+          cell.onclick = function() {
+            var isPend = (state.student.pendingAbsences || []).indexOf(dateStr) >= 0;
+            showError('calError', isPend
+              ? 'この日はお休みとして登録済みです。振替先はホーム画面の「振替先を選ぶ」からお選びください。'
+              : 'この日はすでに振替済みです。変更する場合はホーム画面で一度キャンセルしてください。');
+          };
         } else {
           cell.classList.add('my-day');
           addBadge(startHour);
@@ -1657,6 +1799,9 @@
       btn.disabled = true;
       btn.textContent = state.absentDate ? '振替先を選んでください' : 'お休みする日を選んでください';
     }
+    // 「振替先はあとで選ぶ」：お休み日を選んだ直後（振替先が未選択）だけ出す。ホームから来た場合は出さない
+    var later = document.getElementById('calLaterBtn');
+    if (later) later.style.display = (state.calStep === 'makeup' && state.absentDate && !state.newDate && !state.pendingMode) ? 'block' : 'none';
   }
 
   function changeCalMonth(delta) {
@@ -1672,6 +1817,54 @@
     document.getElementById('cfAbsent').textContent = state.absentDateDisplay;
     document.getElementById('cfNew').textContent = state.newDateDisplay;
     showScreen(3);
+  }
+
+  // ============================================================
+  // ① お休みだけ登録（振替先はあとで選ぶ）
+  // ============================================================
+  function submitAbsenceOnly() {
+    if (!state.student || !state.absentDate) return;
+    var dl = makeupDeadline(state.absentDate);
+    uiConfirm(formatDateLabel(state.absentDate) + ' をお休みとして登録します。\n\n振替先は ' + deadlineLabel(dl) + ' までにお選びください。\n' + DEADLINE_WARN,
+      { okText: '登録する', cancelText: 'やめる' }).then(function(yes) {
+      if (!yes) return;
+      showLoading('登録しています…');
+      callApi('submitAbsence', { sid: state.student.sid, absentDate: state.absentDate }).then(function(res) {
+        if (!res || !res.ok || !res.data || !res.data.success) {
+          var msg = (res && res.data && res.data.message) ? res.data.message
+            : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
+          showCalendar();
+          uiAlert('登録できませんでした' + msg);
+          return;
+        }
+        // ローカル更新
+        state.student.rescheduledDates.push(state.absentDate);
+        state.student.pendingAbsences = state.student.pendingAbsences || [];
+        state.student.pendingAbsences.push(state.absentDate);
+        var raw = findStudent(state.student.sid);
+        if (raw) {
+          raw.bookings = raw.bookings || [];
+          raw.bookings.push({ absentDate: state.absentDate, absentTime: state.student.regularTime,
+            newDate: '', newTime: '', bookingType: 'makeup', pending: true });
+        }
+        // 完了画面（期限と、過ぎたらどうなるかを必ず添える）
+        var left = daysLeft(dl);
+        document.getElementById('successDetail').innerHTML =
+          '<div class="confirm-row"><span class="confirm-label">お名前</span><span class="confirm-value">' + state.student.name + '</span></div>' +
+          '<div class="confirm-row"><span class="confirm-label">お休み</span><span class="confirm-value">' + state.absentDateDisplay + '</span></div>' +
+          '<div class="success-deadline">振替先は <b>' + deadlineLabel(dl) + ' まで</b> にお選びください（あと' + left + '日）' +
+          '<span class="warn">' + DEADLINE_WARN + '</span></div>';
+        var sm = document.querySelector('#screen4 .success-msg');
+        if (sm) sm.textContent = 'お休みを登録しました';
+        var rb = document.querySelector('#screen4 .btn-secondary');
+        if (rb) { rb.style.display = ''; rb.textContent = 'ホームに戻る'; }
+        document.getElementById('successDetail').style.whiteSpace = '';
+        showScreen(4);
+      }).catch(function(err) {
+        showCalendar();
+        uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
+      });
+    });
   }
 
   // ============================================================
@@ -1709,11 +1902,19 @@
       var raw = findStudent(state.student.sid);
       if (raw) {
         raw.bookings = raw.bookings || [];
-        raw.bookings.push({
-          absentDate: state.absentDate, absentTime: state.student.regularTime,
-          newDate: state.newDate, newTime: state.newTime, bookingType: 'makeup'
-        });
+        var existing = raw.bookings.filter(function(b) { return b.bookingType !== 'free' && b.absentDate === state.absentDate && b.pending; })[0];
+        if (existing) {
+          // 振替待ち → 確定（同じお休みの行を更新）
+          existing.newDate = state.newDate; existing.newTime = state.newTime; existing.pending = false;
+        } else {
+          raw.bookings.push({
+            absentDate: state.absentDate, absentTime: state.student.regularTime,
+            newDate: state.newDate, newTime: state.newTime, bookingType: 'makeup'
+          });
+        }
       }
+      state.student.pendingAbsences = (state.student.pendingAbsences || []).filter(function(d) { return d !== state.absentDate; });
+      state.pendingMode = false;
       document.getElementById('successDetail').innerHTML =
         '<div class="confirm-row"><span class="confirm-label">お名前</span><span class="confirm-value">' + state.student.name + '</span></div>' +
         '<div class="confirm-row"><span class="confirm-label">お休み</span><span class="confirm-value">' + state.absentDateDisplay + '</span></div>' +
@@ -1722,7 +1923,7 @@
       var sm = document.querySelector('#screen4 .success-msg');
       if (sm) sm.textContent = '振替予約が完了しました';
       var rb = document.querySelector('#screen4 .btn-secondary');
-      if (rb) rb.style.display = '';
+      if (rb) { rb.style.display = ''; rb.textContent = 'もう一件予約する'; }
       document.getElementById('successDetail').style.whiteSpace = '';
       showScreen(4);
       btn.disabled = false;
@@ -1767,6 +1968,24 @@
     var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     return parseInt(parts[1]) + '/' + parseInt(parts[2]) + '（' + DAY_NAMES[d.getDay()] + '）';
   }
+  // 振替先の選択期限＝お休みした月の翌月末（例：12/5 → 1/31）。サーバー側も同じ計算で検証する
+  function makeupDeadline(absentDateStr) {
+    var p = absentDateStr.split('/');
+    return formatDate(new Date(parseInt(p[0]), parseInt(p[1]) + 1, 0)); // 翌月の0日＝翌月末
+  }
+  function daysLeft(deadlineStr) {
+    var p = deadlineStr.split('/');
+    var dl = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    return Math.round((dl.getTime() - today.getTime()) / 86400000);
+  }
+  function deadlineLabel(deadlineStr) { // '1月31日（土）'
+    var p = deadlineStr.split('/');
+    var d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+    return parseInt(p[1]) + '月' + parseInt(p[2]) + '日（' + DAY_NAMES[d.getDay()] + '）';
+  }
+  var EXPIRED_REASON = '振替先の選択期限（お休みした月の翌月末）を過ぎたため、この振替はご利用いただけません。';
+  var DEADLINE_WARN = '※ 期限を過ぎますと、この振替はご利用いただけなくなります。';
 
   // ============================================================
   // 起動
