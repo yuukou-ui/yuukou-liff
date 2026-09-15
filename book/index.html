@@ -1099,12 +1099,14 @@
           pick.className = 'home-pick-btn';
           pick.textContent = '振替先を選ぶ';
           pick.onclick = (function(ad) { return function() { pickMakeupFor(ad); }; })(b.absentDate);
-          var cancel = document.createElement('button');
-          cancel.className = 'home-cancel-btn';
-          cancel.textContent = '取り消す';
-          cancel.onclick = (function(ad) { return function() { cancelBooking(ad, true); }; })(b.absentDate);
           actions.appendChild(pick);
-          actions.appendChild(cancel);
+          if (canCancelAbsence(b.absentDate)) {
+            var cancel = document.createElement('button');
+            cancel.className = 'home-cancel-btn';
+            cancel.textContent = '取り消す';
+            cancel.onclick = (function(ad) { return function() { cancelBooking(ad, true); }; })(b.absentDate);
+            actions.appendChild(cancel);
+          }
           row.appendChild(info);
           row.appendChild(actions);
         }
@@ -1176,6 +1178,14 @@
   function backToHome() {
     state.pendingMode = false;
     if (state.student) showHome(state.student);
+  }
+  // お休みの登録を取り消せるのは、その日がまだ来ていないとき（当日はお稽古開始前まで）。
+  // 過ぎたお休みは「やっぱり出席した」が成り立たないので、残る操作は「振替先を選ぶ」だけ
+  function canCancelAbsence(absentDate) {
+    var today = formatDate(new Date());
+    if (absentDate > today) return true;
+    if (absentDate < today) return false;
+    return !isPastRegularStart(state.student.regularTime);
   }
 
   function cancelBooking(absentDate, isPending) {
