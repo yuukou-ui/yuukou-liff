@@ -489,6 +489,7 @@
     .home-pending-actions { display: flex; gap: 8px; flex: 1 1 100%; margin-top: 8px; }
     .home-pick-btn { flex: 1; border: none; background: var(--navy); color: white; border-radius: 10px; padding: 11px 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
     .home-pick-btn:active { opacity: 0.8; }
+    .home-closure-tag { display: inline-block; font-size: 11px; font-weight: 700; color: #7e22ce; background: #f3e8ff; border-radius: 6px; padding: 2px 7px; margin-left: 6px; }
     .home-expired { border-color: var(--border); background: var(--border-soft); }
     .home-expired .home-booking-absent { color: var(--gray); text-decoration: line-through; }
     .home-expired-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--red); background: var(--red-bg); border-radius: 6px; padding: 2px 7px; margin-left: 6px; text-decoration: none; }
@@ -654,6 +655,7 @@
       <div class="success-msg">振替予約が完了しました</div>
       <div class="success-detail" id="successDetail"></div>
       <p class="close-hint">ありがとうございます。この画面は閉じて大丈夫です。</p>
+      <p class="close-hint" id="receiptHint" style="margin-top:-6px;">トークに予約の控えが残ります。見当たらなくても、予約は有効です。</p>
       <button class="btn btn-secondary" onclick="resetAll()">もう一件予約する</button>
     </div>
   </div>
@@ -742,6 +744,7 @@
     absentDate: '', absentDateDisplay: '',
     newDate: '', newTime: '', newDateDisplay: '',
     slots: [],
+    closedDates: [],   // 休講日（今日〜翌々月末）。自分の曜日の休講日を「休講」と表示する
     freeBookings: [],
     freeSelectedDate: null,
     freeCalViewMonth: null,
@@ -769,6 +772,31 @@
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(body)
     }).then(function(r){ return r.json(); });
+  }
+
+  // ============================================================
+  // 予約の控え（B-7）：LINEのトークから開いているときは、liff.sendMessages で
+  // 本人のメッセージとしてトークに控えを書く（教室の無料枠を使わない）。
+  // 書けないとき（LINE外・履歴から再読込・スコープ未設定など）は、教室からの push に戻す。
+  // ============================================================
+  function canSelfReceipt() {
+    try {
+      if (!liff.isInClient || !liff.isInClient()) return false;
+      var ctx = liff.getContext ? liff.getContext() : null;
+      var t = ctx && ctx.type;
+      return t === 'utou' || t === 'group' || t === 'room';
+    } catch (e) { return false; }
+  }
+  function writeReceipt(receiptText) {
+    if (!receiptText) return Promise.resolve();
+    // selfReceipt=false で送った場合は教室側が既に push 済み → ここでは何もしない（二重送信防止）
+    if (!canSelfReceipt()) return Promise.resolve();
+    var fallback = function() {
+      return callApi('pushReceipt', { sid: state.student.sid, receiptText: receiptText }).catch(function(){});
+    };
+    try {
+      return liff.sendMessages([{ type: 'text', text: receiptText }]).catch(fallback);
+    } catch (e) { return fallback(); }
   }
 
   // 登録リンクの token を取得（LIFFは付与クエリを liff.state にurlencode格納することがある）
@@ -1013,6 +1041,7 @@
         return;
       }
       state.slots = (res.data && res.data.slots) || [];
+      state.closedDates = (res.data && res.data.closedDates) || [];
       state.student = enrichStudent(raw);
       if (state.student.classType === 'free') {
         startBookingFlow(state.student);
@@ -1082,15 +1111,16 @@
         if (left < 0) {
           // 期限切れ：権利消滅。理由を添える（いきなり消さない）
           row.className = 'home-booking home-expired';
-          info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + ' のお休み' +
+          info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + (b.closure ? ' は休講' : ' のお休み') +
               '<span class="home-expired-tag">期限切れ（' + deadlineLabel(dl) + 'まで）</span></div>' +
             '<div class="home-expired-reason">' + EXPIRED_REASON + '</div>';
           row.appendChild(info);
         } else {
           row.className = 'home-booking home-pending';
           var soon = left <= 7;
-          info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + ' のお休み</div>' +
-            '<div class="home-booking-new">振替先：未定</div>' +
+          info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) +
+              (b.closure ? ' は休講<span class="home-closure-tag">先生都合</span>' : ' のお休み') + '</div>' +
+            '<div class="home-booking-new">' + (b.closure ? '申し訳ありません。振替先をお選びください' : '振替先：未定') + '</div>' +
             '<div class="home-pending-deadline' + (soon ? ' soon' : '') + '">期限 ' + deadlineLabel(dl) + '（あと' + left + '日）' + (left <= 3 ? ' ⚠' : '') + '</div>' +
             '<div class="home-pending-note">' + DEADLINE_WARN + '</div>';
           var actions = document.createElement('div');
@@ -1100,7 +1130,7 @@
           pick.textContent = '振替先を選ぶ';
           pick.onclick = (function(ad) { return function() { pickMakeupFor(ad); }; })(b.absentDate);
           actions.appendChild(pick);
-          if (canCancelAbsence(b.absentDate)) {
+          if (!b.closure && canCancelAbsence(b.absentDate)) {
             var cancel = document.createElement('button');
             cancel.className = 'home-cancel-btn';
             cancel.textContent = '取り消す';
@@ -1131,7 +1161,7 @@
         row.className = 'home-booking';
         var info = document.createElement('div');
         info.className = 'home-booking-info';
-        info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + ' のお休み</div>' +
+        info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + (b.closure ? ' の休講' : ' のお休み') + '</div>' +
           '<div class="home-booking-new">振替先：' + formatDateLabel(b.newDate) + '　' + b.newTime + '</div>';
         var btn = document.createElement('button');
         btn.className = 'home-cancel-btn';
@@ -1197,7 +1227,7 @@
       if (!yes) return;
       var sid = state.student.sid;
       showLoading('キャンセルしています…');
-      callApi('cancelReschedule', { sid: sid, absentDate: absentDate }).then(function(res) {
+      callApi('cancelReschedule', { sid: sid, absentDate: absentDate, selfReceipt: canSelfReceipt() }).then(function(res) {
         if (!res || !res.ok || !res.data || !res.data.success) {
           var msg = (res && res.data && res.data.message) ? res.data.message
             : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
@@ -1205,6 +1235,7 @@
           uiAlert('キャンセルできませんでした' + msg);
           return;
         }
+        if (!res.data.pending) writeReceipt(res.data.receiptText); // お休みだけの取り消しは控えなし（登録時も送っていない）
         var raw = findStudent(sid);
         if (raw && raw.bookings) {
           raw.bookings = raw.bookings.filter(function(b) {
@@ -1464,7 +1495,7 @@
     var payload = state.freeBookings.map(function(b) { return { date: b.date, time: b.time }; });
     var prev = btn.textContent;
     btn.disabled = true; btn.textContent = '処理中...';
-    callApi('applyFreeBookings', { sid: state.student.sid, bookings: payload }).then(function(res) {
+    callApi('applyFreeBookings', { sid: state.student.sid, bookings: payload, selfReceipt: canSelfReceipt() }).then(function(res) {
       if (!res || !res.ok) {
         btn.disabled = false; btn.textContent = prev;
         showError('freeCalError', '送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認ください。'));
@@ -1475,6 +1506,7 @@
         showError('freeCalError', (res.data && res.data.message) ? res.data.message : '予約できませんでした。');
         return;
       }
+      writeReceipt(res.data.receiptText);
       // ローカルの生データも更新（再表示時の整合）
       var raw = findStudent(state.student.sid);
       if (raw) {
@@ -1596,6 +1628,18 @@
     if (state.calStep === 'absent') {
       if (isMyDay) {
         var isTodayCell = (date.getTime() === today.getTime());
+        // 休講日（先生都合・計画休講とも）：お休みの登録は不要。休講の振替はホームの「振替先を選ぶ」から
+        if ((state.closedDates || []).indexOf(dateStr) >= 0) {
+          cell.classList.add('closed');
+          cell.style.cursor = 'pointer';
+          cell.onclick = function() {
+            var isPend = (state.student.pendingAbsences || []).indexOf(dateStr) >= 0;
+            showError('calError', isPend
+              ? 'この日は休講です。振替先はホーム画面の「振替先を選ぶ」からお選びください。'
+              : 'この日は休講です（お稽古はありません）。');
+          };
+          return cell;
+        }
         if (isTodayCell && isPastRegularStart(state.student.regularTime)) {
           cell.classList.add('past');
           cell.style.cursor = 'pointer';
@@ -1894,7 +1938,8 @@
       sid: state.student.sid,
       absentDate: state.absentDate,
       newDate: state.newDate,
-      newTime: state.newTime
+      newTime: state.newTime,
+      selfReceipt: canSelfReceipt()
     }).then(function(res) {
       if (!res || !res.ok) {
         btn.disabled = false; btn.textContent = 'この内容で確定する';
@@ -1906,7 +1951,9 @@
         uiAlert((res.data && res.data.message) ? res.data.message : '予約できませんでした。最初からやり直してください。');
         return;
       }
-      // 成功：ローカル状態を更新（再表示時の整合）
+      // 成功：控えをトークに書く（失敗時は push に戻す・画面は待たない）
+      writeReceipt(res.data.receiptText);
+      // ローカル状態を更新（再表示時の整合）
       state.student.rescheduledDates.push(state.absentDate);
       state.student.bookedSlots.push(state.newDate + '_' + state.newTime);
       var raw = findStudent(state.student.sid);
