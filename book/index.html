@@ -862,7 +862,7 @@
     var hint = document.getElementById('calDeadlineHint');
     if (hint) {
       if (state.calStep === 'makeup' && state.absentDate) {
-        var dl = makeupDeadline(state.absentDate);
+        var dl = deadlineFor(state.absentDate);
         var left = daysLeft(dl);
         hint.innerHTML = '振替先は <b>' + deadlineLabel(dl) + '</b> までの日から選べます（あと' + Math.max(left, 0) + '日）。' + DEADLINE_WARN;
         hint.style.display = 'block';
@@ -1103,7 +1103,7 @@
       pt.textContent = '振替先が未定のお休み';
       container.appendChild(pt);
       pending.forEach(function(b) {
-        var dl = makeupDeadline(b.absentDate);
+        var dl = b.deadline || deadlineFor(b.absentDate);
         var left = daysLeft(dl);
         var row = document.createElement('div');
         var info = document.createElement('div');
@@ -1601,10 +1601,10 @@
       return cell;
     }
     if (date.getTime() === today.getTime()) { cell.classList.add('today'); }
-    // 振替先を選ぶ段階：期限（お休みした月の翌月末）より後の日は選べない
-    if (state.calStep !== 'absent' && state.absentDate && dateStr > makeupDeadline(state.absentDate)) {
+    // 振替先を選ぶ段階：期限より後の日は選べない
+    if (state.calStep !== 'absent' && state.absentDate && dateStr > deadlineFor(state.absentDate)) {
       cell.classList.add('beyond');
-      cell.onclick = function() { showError('calError', '振替先は ' + deadlineLabel(makeupDeadline(state.absentDate)) + ' までの日からお選びください。'); };
+      cell.onclick = function() { showError('calError', '振替先は ' + deadlineLabel(deadlineFor(state.absentDate)) + ' までの日からお選びください。'); };
       return cell;
     }
 
@@ -1878,7 +1878,7 @@
   // ============================================================
   function submitAbsenceOnly() {
     if (!state.student || !state.absentDate) return;
-    var dl = makeupDeadline(state.absentDate);
+    var dl = deadlineFor(state.absentDate);
     uiConfirm(formatDateLabel(state.absentDate) + ' をお休みとして登録します。\n\n振替先は ' + deadlineLabel(dl) + ' までにお選びください。\n' + DEADLINE_WARN,
       { okText: '登録する', cancelText: 'やめる' }).then(function(yes) {
       if (!yes) return;
@@ -1899,9 +1899,10 @@
         if (raw) {
           raw.bookings = raw.bookings || [];
           raw.bookings.push({ absentDate: state.absentDate, absentTime: state.student.regularTime,
-            newDate: '', newTime: '', bookingType: 'makeup', pending: true });
+            newDate: '', newTime: '', bookingType: 'makeup', pending: true, deadline: res.data.deadline || dl });
         }
         // 完了画面（期限と、過ぎたらどうなるかを必ず添える）
+        dl = res.data.deadline || dl;
         var left = daysLeft(dl);
         document.getElementById('successDetail').innerHTML =
           '<div class="confirm-row"><span class="confirm-label">お名前</span><span class="confirm-value">' + state.student.name + '</span></div>' +
@@ -2025,10 +2026,19 @@
     var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     return parseInt(parts[1]) + '/' + parseInt(parts[2]) + '（' + DAY_NAMES[d.getDay()] + '）';
   }
-  // 振替先の選択期限＝お休みした月の翌月末（例：12/5 → 1/31）。サーバー側も同じ計算で検証する
-  function makeupDeadline(absentDateStr) {
-    var p = absentDateStr.split('/');
-    return formatDate(new Date(parseInt(p[0]), parseInt(p[1]) + 1, 0)); // 翌月の0日＝翌月末
+  // 振替先の選択期限はサーバーが決める（通常：お休みした月の翌月末／教室都合の休講：翌々月末／先生が個別に延ばした期限）。
+  // サーバーから届いた期限があればそれを使い、まだ登録していないお休みだけ同じ決まりでここで計算する
+  function deadlineFor(absentDateStr) {
+    var raw = state.student ? findStudent(state.student.sid) : null;
+    var list = (raw && raw.bookings) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].absentDate === absentDateStr && list[i].deadline) return list[i].deadline;
+    }
+    return monthEndAfter(absentDateStr, (state.closedDates || []).indexOf(absentDateStr) >= 0 ? 2 : 1);
+  }
+  function monthEndAfter(dateStr, months) {
+    var p = dateStr.split('/');
+    return formatDate(new Date(parseInt(p[0]), parseInt(p[1]) + months, 0));
   }
   function daysLeft(deadlineStr) {
     var p = deadlineStr.split('/');
@@ -2041,7 +2051,7 @@
     var d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
     return parseInt(p[1]) + '月' + parseInt(p[2]) + '日（' + DAY_NAMES[d.getDay()] + '）';
   }
-  var EXPIRED_REASON = '振替先の選択期限（お休みした月の翌月末）を過ぎたため、この振替はご利用いただけません。';
+  var EXPIRED_REASON = '振替先の選択期限を過ぎたため、この振替はご利用いただけません。';
   var DEADLINE_WARN = '※ 期限を過ぎますと、この振替はご利用いただけなくなります。';
 
   // ============================================================
