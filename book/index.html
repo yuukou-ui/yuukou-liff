@@ -1429,6 +1429,7 @@
     state.freeSelectedDate = { dateStr: dateStr, dateObj: dateObj };
     renderFreeTimeSlots(dateStr, dateObj);
     document.getElementById('freeBackBtn').style.display = 'block';
+    focusCalendar('screenFreeBook', 'freeCalTimeSlots');
   }
 
   function renderFreeTimeSlots(dateStr, dateObj) {
@@ -1766,6 +1767,25 @@
     showError('calError', 'お稽古が始まってからのご連絡と、過ぎた日のお稽古は、振替のご予約ができません。お休みが決まりましたら、お稽古が始まる前までにご登録をお願いします。');
   }
 
+  // 日付をタップしたあと、カレンダーを画面の上の端に合わせる。次に押すもの（時間・ボタン）が下に隠れるときは、見えるところまで動かす（スマホだけ・2026-11-05）
+  function focusCalendar(screenId, nextId) {
+    if (!window.matchMedia || !window.matchMedia('(max-width: 768px)').matches) return;
+    var nav = document.querySelector('#' + screenId + ' .cal-nav');
+    if (!nav) return;
+    requestAnimationFrame(function() {
+      var vh = window.innerHeight;
+      var y = nav.getBoundingClientRect().top + window.pageYOffset - 8;
+      var next = nextId ? document.getElementById(nextId) : null;
+      if (next && next.offsetParent) {
+        var r = next.getBoundingClientRect();
+        var bottom = r.bottom + window.pageYOffset + 16;
+        // 画面より背が高いときは、上の端（見出し）が隠れない所で止める
+        if (bottom - y > vh) y = Math.min(bottom - vh, r.top + window.pageYOffset - 8);
+      }
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    });
+  }
+
   function handleAbsentTap(dateStr) {
     hideError('calError');
     if (!dateStr) {
@@ -1778,6 +1798,7 @@
       updateStepsForCalendar();
       updateCalSummary();
       renderCalendar();
+      focusCalendar('screenCal', '');
       return;
     }
     state.absentDate = dateStr;
@@ -1790,6 +1811,7 @@
     updateStepsForCalendar();
     updateCalSummary();
     renderCalendar();
+    focusCalendar('screenCal', '');
   }
 
   function handleMakeupTap(dateStr) {
@@ -1798,6 +1820,8 @@
     renderCalendar();
     renderTimeSlots(dateStr);
     updateCalSummary();
+    // 時間が1つだけなら自動で選ばれるので、次は「この内容で確認する」
+    focusCalendar('screenCal', state.newTime ? 'calProceedBtn' : 'calTimeSlots');
   }
 
   function renderTimeSlots(dateStr) {
@@ -1847,6 +1871,7 @@
     renderTimeSlots(state.newDate);
     renderCalendar();
     updateCalSummary();
+    focusCalendar('screenCal', 'calProceedBtn');
   }
 
   function updateCalSummary() {
