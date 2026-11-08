@@ -549,20 +549,19 @@
     .mc-month small { font-size: 12px; font-weight: 600; color: var(--text-light); }
     .mc-unpub { font-size: 13px; line-height: 1.7; color: var(--text-light); background: var(--border-soft); border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; }
     .mc-note { font-size: 13px; line-height: 1.7; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; }
-    .cal-cell.mc-lesson { background: #eff6ff; border-color: #93c5fd; cursor: pointer; }
+    .cal-cell.mc-lesson { background: #eff6ff; border-color: #93c5fd; cursor: default; }
     .cal-cell.mc-lesson .num { color: #1e40af; }
     .cal-cell.mc-lesson .badge { background: #2563eb; color: #fff; }
-    .cal-cell.mc-makeup { background: #f0fdf4; border-color: #86efac; cursor: pointer; }
+    .cal-cell.mc-makeup { background: #f0fdf4; border-color: #86efac; cursor: default; }
     .cal-cell.mc-makeup .num { color: #14532d; }
     .cal-cell.mc-makeup .badge { background: var(--green); color: #fff; }
-    .cal-cell.mc-off { background: var(--border-soft); cursor: pointer; }
+    .cal-cell.mc-off { background: var(--border-soft); cursor: default; }
     .cal-cell.mc-off .num { color: var(--gray-light); text-decoration: line-through; }
     .cal-cell.mc-off .badge { background: var(--gray); color: #fff; }
-    .cal-cell.mc-closed { background: #fef2f2; cursor: pointer; }
+    .cal-cell.mc-closed { background: #fef2f2; cursor: default; }
     .cal-cell.mc-closed .num { color: #b91c1c; }
     .cal-cell.mc-closed .badge { background: #dc2626; color: #fff; }
     .cal-cell.mc-leave .badge { background: var(--gray-light); color: #fff; }
-    .cal-cell.past.mc-makeup, .cal-cell.past.mc-off, .cal-cell.past.mc-lesson { cursor: default; }
     .mc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-light); margin: 14px 2px 20px; }
     .mc-legend span { display: inline-flex; align-items: center; gap: 5px; }
     .mc-legend i { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid transparent; display: inline-block; }
@@ -753,7 +752,7 @@
   <div class="screen" id="screenMyCal">
     <div class="card">
       <h2 id="mcTitle"></h2>
-      <p class="subtitle" id="mcSub">日付を押すと、お休みや振替に進めます。</p>
+      <p class="subtitle" id="mcSub">お休みや振替は、下のボタンからどうぞ。</p>
       <div id="mcBody"></div>
       <div class="mc-legend"><span><i class="l1"></i>お稽古</span><span><i class="l2"></i>振替・予約</span><span><i class="l3"></i>お休み</span><span><i class="l4"></i>休講</span></div>
       <button class="btn btn-primary" id="mcNewBtn" onclick="mcNewBooking()">振替を予約する</button>
@@ -1230,8 +1229,8 @@
   function srClose() { try { liff.closeWindow(); } catch (e) {} }
 
   // ============================================================
-  // お稽古カレンダー（2026-11-08）：今月・来月の自分のお稽古日・お休み・振替・休講を1画面で。
-  // 日付を押すと、お休み・振替の手続きに進む。メニューの「お稽古カレンダー」は ?view=cal で開く。
+  // お稽古カレンダー（2026-11-08）：今月・来月の自分のお稽古日・お休み・振替・休講を1画面で見るだけ。
+  // お休み・振替は下のボタンから（運営者「カレンダーは見るだけ・振替予約に移るボタンだけでよい」）。メニューの「お稽古カレンダー」は ?view=cal で開く。
   // お稽古日＝公開済みの月の、自分のクラス（曜日と時間）の枠がある日（サーバーの availableSlots と同じ材料）
   // ============================================================
   var mcWanted = null;
@@ -1263,7 +1262,7 @@
     document.getElementById('mcTitle').textContent = st.name + 'さんのお稽古日';
     document.getElementById('mcSub').textContent = free
       ? '予約した日が出ます。予約を変えるときは、下のボタンからどうぞ。'
-      : '日付を押すと、お休みや振替に進めます。';
+      : 'お休みや振替は、下のボタンからどうぞ。';
     document.getElementById('mcNewBtn').textContent = free ? '予約を変える' : '振替を予約する';
     document.getElementById('mcNewBtn').style.display = leaveNow(st) ? 'none' : '';
     document.getElementById('mcSibBtn').style.display = (state.students && state.students.length > 1) ? 'block' : 'none';
@@ -1334,60 +1333,19 @@
     var closed = !!(off && off.closure);
     if (mk) {
       cell.classList.add('mc-makeup'); badge(mk.free ? '予約' : '振替');
-      if (!past) cell.onclick = function() { mcTapMakeup(ds, mk); };
     } else if (closed) {
       cell.classList.add('mc-closed'); badge('休講');
-      cell.onclick = function() {
-        if (off && off.pending) { pickMakeupFor(ds); return; }
-        uiAlert(formatDateLabel(ds) + ' は休講です（お稽古はありません）。');
-      };
     } else if (off) {
       cell.classList.add('mc-off'); badge('休み');   // closure 以外のお休み
-      if (!past) cell.onclick = function() { mcTapOff(ds, off); };
     } else if (lesson[ds] && inLeaveMonth(ds)) {
       cell.classList.add('mc-leave'); badge('休会');
     } else if (lesson[ds]) {
       cell.classList.add('mc-lesson'); badge(shortStartHour(st.regularTime));
-      if (!past) cell.onclick = function() { mcTapLesson(ds); };
     }
     if (past) cell.classList.add('past');
     return cell;
   }
 
-  // お稽古の日 → お休みして振替を選ぶ（いつもの手続きの2つ目の段から）
-  function mcTapLesson(ds) {
-    var st = state.student;
-    uiConfirm(formatDateLabel(ds) + ' ' + st.regularTime + '\nこの日をお休みして\n振替先を選びますか？', { okText: '振替先を選ぶ', cancelText: 'やめる' }).then(function(yes) {
-      if (!yes) return;
-      document.body.classList.remove('mc-mode');
-      state.pendingMode = false;
-      startBookingFlow(st);
-      var p = ds.split('/');
-      state.calViewMonth = new Date(+p[0], +p[1] - 1, 1);
-      handleAbsentTap(ds);
-    });
-  }
-  // お休みの日 → 振替先が未定なら選ぶ
-  function mcTapOff(ds, off) {
-    if (off.pending) {
-      uiConfirm(formatDateLabel(ds) + ' はお休みです（振替先はまだ決まっていません）。\n振替先を選びますか？', { okText: '振替先を選ぶ', cancelText: '閉じる' }).then(function(yes) {
-        if (!yes) return;
-        document.body.classList.remove('mc-mode');
-        pickMakeupFor(ds);
-      });
-    } else {
-      uiAlert(formatDateLabel(ds) + ' はお休みです。\n振替先：' + formatDateLabel(off.newDate) + ' ' + (off.newTime || ''));
-    }
-  }
-  // 振替・予約の日 → 中身を見せる。振替はここからキャンセルもできる
-  function mcTapMakeup(ds, mk) {
-    if (mk.free || !mk.from) { uiAlert(formatDateLabel(ds) + ' ' + (mk.time || '') + ' のお稽古を予約しています。'); return; }
-    uiConfirm(formatDateLabel(ds) + ' ' + (mk.time || '') + ' は振替のお稽古です\n（' + formatDateLabel(mk.from) + ' のお休みの分）', { okText: 'この振替をキャンセル', cancelText: '閉じる' }).then(function(yes) {
-      if (!yes) return;
-      document.body.classList.remove('mc-mode');
-      cancelBooking(mk.from);
-    });
-  }
   function mcNewBooking() {
     document.body.classList.remove('mc-mode');
     state.pendingMode = false;
