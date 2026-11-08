@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お稽古日の変更 - 優光書道教室</title>
+  <style>
+    :root { --navy: #1a2940; --blue: #2563eb; --bg: #f7f5f1; --text: #1f2937; --light: #6b7280; --border: #e5e7eb; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+    .header { background: linear-gradient(135deg, var(--navy), var(--blue)); color: #fff; padding: 26px 16px 22px; text-align: center; }
+    .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 2px; }
+    .header p { font-size: 13px; opacity: 0.85; letter-spacing: 1px; margin-top: 4px; }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 18px 16px 40px; }
+    .lead { font-size: 15px; line-height: 1.8; color: var(--text); margin: 4px 4px 18px; }
+    .choice { display: block; width: 100%; text-decoration: none; color: inherit; background: #fff; border: 1.5px solid var(--border); border-radius: 16px; padding: 20px 18px; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); position: relative; transition: transform 0.15s; }
+    .choice:active { transform: scale(0.99); }
+    .choice.main { border-color: var(--navy); }
+    .choice .t { display: block; font-size: 18px; font-weight: 800; color: var(--navy); padding-right: 28px; }
+    .choice .d { display: block; font-size: 14px; line-height: 1.7; color: var(--light); margin-top: 6px; padding-right: 28px; }
+    .choice .tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--blue); background: #eff6ff; border-radius: 999px; padding: 3px 10px; margin-bottom: 8px; }
+    .choice::after { content: '›'; position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 28px; color: #9ca3af; }
+    .talk { display: block; text-align: center; font-size: 13px; color: var(--light); text-decoration: underline; text-underline-offset: 3px; margin: 22px 8px 0; line-height: 1.7; }
+    .foot { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 26px; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+  <div class="header"><h1>お稽古日の変更</h1><p>優光書道教室</p></div>
+  <div class="wrap">
+    <p class="lead">お休み・振替のご連絡は、こちらから。</p>
+    <a class="choice main" id="goBook" href="https://liff.line.me/2010125456-yyTmXEyt">
+      <span class="tag">1月から始まる予約画面</span>
+      <span class="t">予約画面をひらく</span>
+      <span class="d">空いている日を、その場で選べます。はじめての方は、お名前と曜日を入れるだけです。</span>
+    </a>
+    <a class="talk" id="goTalk" href="https://line.me/R/oaMessage/%40dpz8082z/?%E3%81%8A%E7%A8%BD%E5%8F%A4%E6%97%A5%E3%81%AE%E5%A4%89%E6%9B%B4%E3%81%AE%E3%81%94%E9%80%A3%E7%B5%A1%E3%81%A7%E3%81%99%E3%80%82%0A">予約画面が使えないときは、トークでお知らせください</a>
+    <p class="foot">優光書道教室</p>
+  </div>
+</body>
+</html>
