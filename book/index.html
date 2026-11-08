@@ -533,7 +533,7 @@
     .sr-input { width: 100%; padding: 14px; font-size: 17px; border: 1.5px solid #d1d5db; border-radius: 12px; font-family: inherit; color: var(--text); background: #fff; -webkit-appearance: none; }
     .sr-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
     .sr-hint { font-size: 13px; line-height: 1.6; color: var(--text-light); margin: 8px 2px 20px; }
-    .sr-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .sr-days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
     .sr-day { min-height: 48px; border: 1.5px solid #d1d5db; border-radius: 12px; background: #fff; color: var(--text); font-size: 17px; font-weight: 700; font-family: inherit; cursor: pointer; padding: 0; transition: all 0.15s; }
     .sr-day.free { grid-column: 1 / -1; font-size: 15px; font-weight: 600; }
     .sr-day.on { background: var(--navy); border-color: var(--navy); color: #fff; box-shadow: 0 2px 8px rgba(26,41,64,0.25); }
@@ -837,6 +837,14 @@
   var DAY_MAP = { '日':0, '月':1, '火':2, '水':3, '木':4, '金':5, '土':6 };
   var FREE_MAX = 3;
 
+  // あいさつ：日本の時刻で、朝・昼・夜を使い分ける（2026-11-08 運営者の希望。スマホの時刻の設定がずれていても日本時間で）
+  function greetingNow() {
+    var h = (new Date().getUTCHours() + 9) % 24;
+    if (h >= 5 && h < 11) return 'おはようございます';
+    if (h >= 11 && h < 18) return 'こんにちは';
+    return 'こんばんは';
+  }
+
   // ============================================================
   // 通信（simple request：POST + text/plain でプリフライト回避）
   // ============================================================
@@ -1087,7 +1095,7 @@
   function srRenderDays() {
     var box = document.getElementById('srDays');
     box.innerHTML = '';
-    ['月', '火', '水', '木', '金', '土', '日', 'フリー'].forEach(function(d) {
+    ['月', '火', '水', '木', '土', 'フリー'].forEach(function(d) {   // お稽古のある曜日だけ（金・日はない。2026-11-08 運営者）
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'sr-day' + (d === 'フリー' ? ' free' : '') + (sr.day === d ? ' on' : '');
@@ -1281,7 +1289,7 @@
     var now = new Date();
     state.calViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     document.getElementById('studentGreeting').textContent =
-      student.name + 'さん、お疲れさまです';
+      student.name + 'さん、' + greetingNow();
     document.getElementById('backToSiblingBtn').style.display =
       (state.students && state.students.length > 1) ? 'block' : 'none';
     document.getElementById('calHint').className = 'cal-hint';
@@ -1298,7 +1306,7 @@
   function showHome(student) {
     var raw = findStudent(student.sid) || {};
     var bookings = (raw.bookings || []).filter(function(b) { return b.bookingType !== 'free'; });
-    document.getElementById('homeGreeting').textContent = student.name + 'さん、お疲れさまです';
+    document.getElementById('homeGreeting').textContent = student.name + 'さん、' + greetingNow();
     var container = document.getElementById('homeBookings');
     container.innerHTML = '';
     var pending = bookings.filter(function(b) { return b.pending; });
@@ -1416,7 +1424,7 @@
     state.calStep = 'makeup';
     var now = new Date();
     state.calViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    document.getElementById('studentGreeting').textContent = state.student.name + 'さん、お疲れさまです';
+    document.getElementById('studentGreeting').textContent = state.student.name + 'さん、' + greetingNow();
     document.getElementById('backToSiblingBtn').style.display = 'none';
     document.getElementById('calHint').className = 'cal-hint makeup';
     document.getElementById('calHint').textContent = formatDateLabel(absentDate) + ' のお休みの振替先を、緑の日（開講日）から選んでください';
@@ -1509,7 +1517,7 @@
     var now = new Date();
     state.freeCalViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     document.getElementById('freeStudentGreeting').textContent =
-      student.name + 'さん、お疲れさまです';
+      student.name + 'さん、' + greetingNow();
     document.getElementById('freeCalTimeSlots').innerHTML = '';
     document.getElementById('freeBackBtn').style.display = 'none';
     hideError('freeCalError');
