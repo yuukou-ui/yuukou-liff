@@ -542,6 +542,34 @@
     .sr-center { text-align: center; }
     .sr-names { white-space: pre-line; font-size: 18px; font-weight: 700; color: var(--navy); margin: 4px 0 18px; text-align: center; line-height: 1.6; }
     #srErr { margin: 0 0 12px; }
+    /* お稽古カレンダー（2026-11-08）：今月・来月の自分のお稽古日。日付を押すと、お休み・振替の手続きへ */
+    body.mc-mode .steps { display: none; }
+    .mc-open { margin: 0 0 18px; font-size: 15px; }
+    .mc-month { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 2px 8px; font-size: 17px; font-weight: 800; color: var(--navy); }
+    .mc-month small { font-size: 12px; font-weight: 600; color: var(--text-light); }
+    .mc-unpub { font-size: 13px; line-height: 1.7; color: var(--text-light); background: var(--border-soft); border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; }
+    .mc-note { font-size: 13px; line-height: 1.7; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; }
+    .cal-cell.mc-lesson { background: #eff6ff; border-color: #93c5fd; cursor: pointer; }
+    .cal-cell.mc-lesson .num { color: #1e40af; }
+    .cal-cell.mc-lesson .badge { background: #2563eb; color: #fff; }
+    .cal-cell.mc-makeup { background: #f0fdf4; border-color: #86efac; cursor: pointer; }
+    .cal-cell.mc-makeup .num { color: #14532d; }
+    .cal-cell.mc-makeup .badge { background: var(--green); color: #fff; }
+    .cal-cell.mc-off { background: var(--border-soft); cursor: pointer; }
+    .cal-cell.mc-off .num { color: var(--gray-light); text-decoration: line-through; }
+    .cal-cell.mc-off .badge { background: var(--gray); color: #fff; }
+    .cal-cell.mc-closed { background: #fef2f2; cursor: pointer; }
+    .cal-cell.mc-closed .num { color: #b91c1c; }
+    .cal-cell.mc-closed .badge { background: #dc2626; color: #fff; }
+    .cal-cell.mc-leave .badge { background: var(--gray-light); color: #fff; }
+    .cal-cell.past.mc-makeup, .cal-cell.past.mc-off, .cal-cell.past.mc-lesson { cursor: default; }
+    .mc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-light); margin: 14px 2px 20px; }
+    .mc-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .mc-legend i { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid transparent; display: inline-block; }
+    .mc-legend .l1 { background: #eff6ff; border-color: #93c5fd; }
+    .mc-legend .l2 { background: #f0fdf4; border-color: #86efac; }
+    .mc-legend .l3 { background: var(--border-soft); border-color: var(--border); }
+    .mc-legend .l4 { background: #fef2f2; border-color: #fecaca; }
     .sr-talk { display: block; text-align: center; font-size: 13px; color: var(--text-light); text-decoration: underline; text-underline-offset: 3px; margin: 14px 0 0; line-height: 1.7; }
     .sr-sib { font-size: 14px; color: var(--blue); }
   </style>
@@ -589,6 +617,7 @@
     <div class="card">
       <h2 id="homeGreeting"></h2>
       <p class="subtitle" id="homeSubtitle">現在の振替予約です。新しく予約することもできます。</p>
+      <button class="btn btn-secondary mc-open" onclick="showMyCalendar()">📅 今月・来月のお稽古日を見る</button>
       <div id="homeBookings"></div>
       <button class="btn btn-primary" id="homeNewBtn" onclick="goToNewBooking()">新しく振替を予約する</button>
       <button class="btn btn-back" id="homeBackToSiblingBtn" style="display:none;" onclick="backToSibling()">&#8249; 別のお名前を選ぶ</button>
@@ -688,6 +717,7 @@
     <div class="card">
       <h2 id="freeStudentGreeting"></h2>
       <p class="subtitle">月3回まで、ご希望の日をカレンダーから選んでください。</p>
+      <button class="btn btn-secondary mc-open" onclick="showMyCalendar()">📅 今月・来月のお稽古日を見る</button>
 
       <div class="free-summary">
         <div class="free-summary-title">📅 ご予約の状況</div>
@@ -716,6 +746,19 @@
 
       <button class="btn btn-primary" id="freeSubmitBtn" onclick="submitFreeBookings()" disabled>予約内容を確定する</button>
       <button class="btn btn-back" id="freeBackBtn" style="display:none;" onclick="cancelFreeDaySelection()">&#8249; キャンセル</button>
+    </div>
+  </div>
+
+  <!-- お稽古カレンダー（2026-11-08） -->
+  <div class="screen" id="screenMyCal">
+    <div class="card">
+      <h2 id="mcTitle"></h2>
+      <p class="subtitle" id="mcSub">日付を押すと、お休みや振替に進めます。</p>
+      <div id="mcBody"></div>
+      <div class="mc-legend"><span><i class="l1"></i>お稽古</span><span><i class="l2"></i>振替・予約</span><span><i class="l3"></i>お休み</span><span><i class="l4"></i>休講</span></div>
+      <button class="btn btn-primary" id="mcNewBtn" onclick="mcNewBooking()">振替を予約する</button>
+      <button class="btn btn-back" onclick="mcToHome()">&#8249; 予約の一覧へ</button>
+      <button class="btn btn-back" id="mcSibBtn" style="display:none;" onclick="mcToSibling()">&#8249; 別のお名前を選ぶ</button>
     </div>
   </div>
 
@@ -905,6 +948,7 @@
   // 画面切り替え
   // ============================================================
   function showScreen(n) {
+    document.body.classList.remove('mc-mode');
     document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
     document.getElementById('screen' + n).classList.add('active');
     for (var i = 1; i <= 3; i++) {
@@ -921,6 +965,7 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function showScreenById(id) {
+    document.body.classList.toggle('mc-mode', id === 'screenMyCal');   // 上の段階表示はお稽古カレンダーでは出さない
     document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
     document.getElementById(id).classList.add('active');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1184,6 +1229,180 @@
   function srBackToMine() { document.body.classList.remove('sr-mode'); routeStudents(); }
   function srClose() { try { liff.closeWindow(); } catch (e) {} }
 
+  // ============================================================
+  // お稽古カレンダー（2026-11-08）：今月・来月の自分のお稽古日・お休み・振替・休講を1画面で。
+  // 日付を押すと、お休み・振替の手続きに進む。メニューの「お稽古カレンダー」は ?view=cal で開く。
+  // お稽古日＝公開済みの月の、自分のクラス（曜日と時間）の枠がある日（サーバーの availableSlots と同じ材料）
+  // ============================================================
+  var mcWanted = null;
+  function mcIsWanted() {
+    if (mcWanted === null) {
+      var pick = function(qs) { try { return new URLSearchParams(qs).get('view'); } catch (e) { return null; } };
+      var v = pick(location.search);
+      if (!v) { var st = new URLSearchParams(location.search).get('liff.state'); if (st) { try { v = pick(decodeURIComponent(st).replace(/^[^?]*/, '')); } catch (e) {} } }
+      mcWanted = (v === 'cal');
+    }
+    return mcWanted;
+  }
+
+  function mcEvents(student) {
+    var raw = findStudent(student.sid) || {};
+    var ev = { off: {}, makeup: {} };
+    (raw.bookings || []).forEach(function(b) {
+      if (b.bookingType === 'free') { if (b.newDate) ev.makeup[b.newDate] = { time: b.newTime, free: true }; return; }
+      if (b.absentDate) ev.off[b.absentDate] = b;
+      if (b.newDate) ev.makeup[b.newDate] = { time: b.newTime, from: b.absentDate };
+    });
+    return ev;
+  }
+
+  function showMyCalendar() {
+    var st = state.student; if (!st) return;
+    document.body.classList.add('mc-mode');
+    var free = st.classType === 'free';
+    document.getElementById('mcTitle').textContent = st.name + 'さんのお稽古日';
+    document.getElementById('mcSub').textContent = free
+      ? '予約した日が出ます。予約を変えるときは、下のボタンからどうぞ。'
+      : '日付を押すと、お休みや振替に進めます。';
+    document.getElementById('mcNewBtn').textContent = free ? '予約を変える' : '振替を予約する';
+    document.getElementById('mcNewBtn').style.display = leaveNow(st) ? 'none' : '';
+    document.getElementById('mcSibBtn').style.display = (state.students && state.students.length > 1) ? 'block' : 'none';
+    var body = document.getElementById('mcBody');
+    body.innerHTML = '';
+    if (st.leave) {
+      var n = document.createElement('div');
+      n.className = 'mc-note';
+      n.textContent = st.leave.now ? '休会中です。休会の月のお稽古はありません。' : jpYm(st.leave.from) + 'から休会の予定です。';
+      body.appendChild(n);
+    }
+    var ev = mcEvents(st);
+    var lesson = {}, pubMonths = {};
+    (state.slots || []).forEach(function(s) {
+      pubMonths[s.date.slice(0, 7)] = true;
+      if (s.time === st.regularTime && s.dayName === st.regularDay) lesson[s.date] = true;   // 自分のクラス（曜日と時間）の枠がある日だけ
+    });
+    var now = new Date();
+    for (var k = 0; k < 2; k++) {
+      var first = new Date(now.getFullYear(), now.getMonth() + k, 1);
+      var ym = formatDate(first).slice(0, 7);
+      var head = document.createElement('div');
+      head.className = 'mc-month';
+      head.innerHTML = '<span>' + first.getFullYear() + '年' + (first.getMonth() + 1) + '月</span>' + (k === 0 ? '<small>今月</small>' : '<small>来月</small>');
+      body.appendChild(head);
+      var hasData = pubMonths[ym] || Object.keys(ev.makeup).some(function(d) { return d.slice(0, 7) === ym; });
+      if (!hasData && !free) {
+        var u = document.createElement('div');
+        u.className = 'mc-unpub';
+        u.textContent = k === 0 ? 'この月のお稽古日は、まだ出ていません。' : '来月のお稽古日は、まだ出ていません（毎月15日ごろまでに出ます）。';
+        body.appendChild(u);
+      }
+      body.appendChild(mcGrid(first, st, ev, lesson));
+    }
+    for (var i = 1; i <= 3; i++) { document.getElementById('step' + i).className = 'step-item'; }
+    showScreenById('screenMyCal');
+  }
+
+  function mcGrid(first, st, ev, lesson) {
+    var grid = document.createElement('div');
+    grid.className = 'cal-grid';
+    DAY_NAMES.forEach(function(d, i) {
+      var h = document.createElement('div');
+      h.className = 'cal-dow' + (i === 0 ? ' sun' : (i === 6 ? ' sat' : ''));
+      h.textContent = d;
+      grid.appendChild(h);
+    });
+    var y = first.getFullYear(), m = first.getMonth();
+    for (var b = 0; b < first.getDay(); b++) { var e = document.createElement('div'); e.className = 'cal-cell other'; grid.appendChild(e); }
+    var last = new Date(y, m + 1, 0).getDate();
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var myDow = DAY_MAP[st.regularDay];
+    for (var dd = 1; dd <= last; dd++) grid.appendChild(mcCell(new Date(y, m, dd), st, ev, lesson, myDow, today));
+    return grid;
+  }
+
+  function mcCell(date, st, ev, lesson, myDow, today) {
+    var cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    var num = document.createElement('span'); num.className = 'num'; num.textContent = date.getDate(); cell.appendChild(num);
+    var ds = formatDate(date);
+    var badge = function(t) { var b = document.createElement('span'); b.className = 'badge'; b.textContent = t; cell.appendChild(b); };
+    var isToday = date.getTime() === today.getTime();
+    var past = date.getTime() < today.getTime() || (isToday && lesson[ds] && isPastRegularStart(st.regularTime) && !ev.makeup[ds]);
+    if (isToday) cell.classList.add('today');
+    var mk = ev.makeup[ds], off = ev.off[ds];
+    // 赤い「休講」は、先生都合の休講（振替が付く）だけ。月3回のきまりで元から無い日は、何も付けない
+    var closed = !!(off && off.closure);
+    if (mk) {
+      cell.classList.add('mc-makeup'); badge(mk.free ? '予約' : '振替');
+      if (!past) cell.onclick = function() { mcTapMakeup(ds, mk); };
+    } else if (closed) {
+      cell.classList.add('mc-closed'); badge('休講');
+      cell.onclick = function() {
+        if (off && off.pending) { pickMakeupFor(ds); return; }
+        uiAlert(formatDateLabel(ds) + ' は休講です（お稽古はありません）。');
+      };
+    } else if (off) {
+      cell.classList.add('mc-off'); badge('休み');   // closure 以外のお休み
+      if (!past) cell.onclick = function() { mcTapOff(ds, off); };
+    } else if (lesson[ds] && inLeaveMonth(ds)) {
+      cell.classList.add('mc-leave'); badge('休会');
+    } else if (lesson[ds]) {
+      cell.classList.add('mc-lesson'); badge(shortStartHour(st.regularTime));
+      if (!past) cell.onclick = function() { mcTapLesson(ds); };
+    }
+    if (past) cell.classList.add('past');
+    return cell;
+  }
+
+  // お稽古の日 → お休みして振替を選ぶ（いつもの手続きの2つ目の段から）
+  function mcTapLesson(ds) {
+    var st = state.student;
+    uiConfirm(formatDateLabel(ds) + ' ' + st.regularTime + '\nこの日をお休みして\n振替先を選びますか？', { okText: '振替先を選ぶ', cancelText: 'やめる' }).then(function(yes) {
+      if (!yes) return;
+      document.body.classList.remove('mc-mode');
+      state.pendingMode = false;
+      startBookingFlow(st);
+      var p = ds.split('/');
+      state.calViewMonth = new Date(+p[0], +p[1] - 1, 1);
+      handleAbsentTap(ds);
+    });
+  }
+  // お休みの日 → 振替先が未定なら選ぶ
+  function mcTapOff(ds, off) {
+    if (off.pending) {
+      uiConfirm(formatDateLabel(ds) + ' はお休みです（振替先はまだ決まっていません）。\n振替先を選びますか？', { okText: '振替先を選ぶ', cancelText: '閉じる' }).then(function(yes) {
+        if (!yes) return;
+        document.body.classList.remove('mc-mode');
+        pickMakeupFor(ds);
+      });
+    } else {
+      uiAlert(formatDateLabel(ds) + ' はお休みです。\n振替先：' + formatDateLabel(off.newDate) + ' ' + (off.newTime || ''));
+    }
+  }
+  // 振替・予約の日 → 中身を見せる。振替はここからキャンセルもできる
+  function mcTapMakeup(ds, mk) {
+    if (mk.free || !mk.from) { uiAlert(formatDateLabel(ds) + ' ' + (mk.time || '') + ' のお稽古を予約しています。'); return; }
+    uiConfirm(formatDateLabel(ds) + ' ' + (mk.time || '') + ' は振替のお稽古です\n（' + formatDateLabel(mk.from) + ' のお休みの分）', { okText: 'この振替をキャンセル', cancelText: '閉じる' }).then(function(yes) {
+      if (!yes) return;
+      document.body.classList.remove('mc-mode');
+      cancelBooking(mk.from);
+    });
+  }
+  function mcNewBooking() {
+    document.body.classList.remove('mc-mode');
+    state.pendingMode = false;
+    startBookingFlow(state.student);
+  }
+  function mcToHome() {
+    mcWanted = false;
+    document.body.classList.remove('mc-mode');
+    if (state.student.classType === 'free' && !leaveNow(state.student)) startBookingFlow(state.student); else showHome(state.student);
+  }
+  function mcToSibling() {
+    document.body.classList.remove('mc-mode');
+    backToSibling();
+  }
+
   function routeStudents() {
     if (state.students.length === 0) {
       showRegister('');
@@ -1259,6 +1478,7 @@
       state.slots = (res.data && res.data.slots) || [];
       state.closedDates = (res.data && res.data.closedDates) || [];
       state.student = enrichStudent(raw);
+      if (mcIsWanted()) { showMyCalendar(); return; }   // メニューの「お稽古カレンダー」から開いた（?view=cal）
       if (state.student.classType === 'free' && !leaveNow(state.student)) {
         startBookingFlow(state.student);
       } else {
@@ -1466,13 +1686,20 @@
           return;
         }
         if (!res.data.pending) writeReceipt(res.data.receiptText); // お休みだけの取り消しは控えなし（登録時も送っていない）
-        var raw = findStudent(sid);
-        if (raw && raw.bookings) {
-          raw.bookings = raw.bookings.filter(function(b) {
-            return !(b.bookingType !== 'free' && b.absentDate === absentDate);
-          });
-        }
-        selectStudentBySid(sid);
+        // 取り消したあとは、サーバーの今の状態を読み直す（確定した振替のキャンセルは「振替待ち」に戻るため。2026-11-08）
+        var fallback = function() {
+          var raw = findStudent(sid);
+          if (raw && raw.bookings) {
+            raw.bookings = raw.bookings.filter(function(b) {
+              return !(b.bookingType !== 'free' && b.absentDate === absentDate);
+            });
+          }
+          selectStudentBySid(sid);
+        };
+        callApi('myBookings').then(function(r2) {
+          if (r2 && r2.ok && r2.data && r2.data.linked) { state.students = r2.data.students || []; selectStudentBySid(sid); }
+          else fallback();
+        }).catch(fallback);
       }).catch(function(err) {
         showHome(state.student);
         uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
