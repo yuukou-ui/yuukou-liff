@@ -542,6 +542,7 @@
     .sr-center { text-align: center; }
     .sr-names { white-space: pre-line; font-size: 18px; font-weight: 700; color: var(--navy); margin: 4px 0 18px; text-align: center; line-height: 1.6; }
     #srErr { margin: 0 0 12px; }
+    .sr-talk { display: block; text-align: center; font-size: 13px; color: var(--text-light); text-decoration: underline; text-underline-offset: 3px; margin: 14px 0 0; line-height: 1.7; }
     .sr-sib { font-size: 14px; color: var(--blue); }
   </style>
 </head>
@@ -734,6 +735,7 @@
       <div class="error-msg" id="srErr"></div>
       <button class="btn btn-primary" id="srGo" onclick="srSubmit()">登録する</button>
       <button class="btn btn-back" id="srBackBtn" style="display:none;" onclick="srBackToMine()">&#8249; もどる</button>
+      <a class="sr-talk" id="srTalk" href="https://line.me/R/oaMessage/%40dpz8082z/?%E3%81%8A%E7%A8%BD%E5%8F%A4%E6%97%A5%E3%81%AE%E5%A4%89%E6%9B%B4%E3%81%AE%E3%81%94%E9%80%A3%E7%B5%A1%E3%81%A7%E3%81%99%E3%80%82%0A">使えないときは、トークでお知らせください</a>
     </div>
   </div>
 
@@ -1075,6 +1077,7 @@
     note.style.display = sr.mode === 'link' ? 'block' : 'none';
     note.textContent = 'お使いの登録リンクは、いまは使えなくなっています。お名前と曜日で登録できます。';
     document.getElementById('srBackBtn').style.display = (state.students && state.students.length) ? 'block' : 'none';
+    document.getElementById('srTalk').style.display = sib ? 'none' : 'block';   // ご家族を足すときは出さない
     if (sib) { document.getElementById('srName').value = ''; sr.day = ''; }
     hideError('srErr');
     srRenderDays();
