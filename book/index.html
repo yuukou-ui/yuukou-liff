@@ -413,6 +413,9 @@
     .free-summary-title { font-size: 13px; font-weight: 700; color: #5b21b6; margin-bottom: 8px; }
     .free-summary-count { font-size: 15px; font-weight: 800; color: #6d28d9; margin-bottom: 10px; }
     .free-summary-count.full { color: #15803d; }
+    .free-summary-count small { display: block; font-size: 13px; font-weight: 700; margin-top: 2px; color: #7c3aed; }
+    .free-summary-count.full small { color: #15803d; }
+    .free-summary-count .fb-done { font-size: 12px; font-weight: 600; color: var(--gray); margin-left: 4px; }
     .free-summary-list { display: flex; flex-direction: column; gap: 6px; }
     .free-booking-pill { display: flex; align-items: center; gap: 10px; background: white; border: 1.5px solid #c4b5fd; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
     .free-booking-pill .fb-date { font-weight: 700; color: var(--text); flex: 1; }
@@ -562,6 +565,7 @@
     .cal-cell.mc-closed .num { color: #b91c1c; }
     .cal-cell.mc-closed .badge { background: #dc2626; color: #fff; }
     .cal-cell.mc-leave .badge { background: var(--gray-light); color: #fff; }
+    .mc-remain { font-size: 13px; font-weight: 700; color: #15803d; margin: -2px 2px 8px; }
     /* 日付の上に種類、下に時刻（2026-11-09） */
     #mcBody .cal-cell { aspect-ratio: auto; min-height: 54px; }
     #mcBody .mc-tag { position: absolute; top: 4px; font-size: 9px; font-weight: 800; line-height: 1; padding: 2px 4px; border-radius: 6px; color: #fff; }
@@ -730,9 +734,7 @@
 
       <div class="free-summary">
         <div class="free-summary-title">📅 ご予約の状況</div>
-        <div class="free-summary-count">
-          <span id="freeBookedCount">0</span> / 3 日 予約中
-        </div>
+        <div class="free-summary-count" id="freeBookedCount"></div>
         <div class="free-summary-list" id="freeBookingsList"></div>
       </div>
 
@@ -1301,6 +1303,16 @@
       head.className = 'mc-month';
       head.innerHTML = '<span>' + first.getFullYear() + '年' + (first.getMonth() + 1) + '月</span>' + (k === 0 ? '<small>今月</small>' : '<small>来月</small>');
       body.appendChild(head);
+      // フリーの方：その月の「あと○回予約できます」（2026-11-09）
+      if (free) {
+        var remainTxt = freeRemainText(ym, freeUsedIn(ym, Object.keys(ev.makeup)));
+        if (remainTxt) {
+          var rm = document.createElement('div');
+          rm.className = 'mc-remain';
+          rm.textContent = remainTxt;
+          body.appendChild(rm);
+        }
+      }
       var hasData = pubMonths[ym] || Object.keys(ev.makeup).some(function(d) { return d.slice(0, 7) === ym; });
       if (!hasData && !free) {
         var u = document.createElement('div');
@@ -1715,11 +1727,37 @@
   // ============================================================
   // フリー型：月次自己予約フロー
   // ============================================================
+  // --- フリーの回数（月ごと）2026-11-09 ---
+  // 過ぎた日＋これからの予約の日付（予約画面で使う）
+  function freeAllDates() {
+    return (state.freePast || []).concat(state.freeBookings || []).map(function(b) { return b.date; });
+  }
+  // その月（'2026/12'）に入っている回数
+  function freeUsedIn(ym, dates) {
+    return dates.filter(function(d) { return String(d).slice(0, 7) === ym; }).length;
+  }
+  // 「あと1回予約できます」など。その月にこれから予約できる日があるときだけ「あと○回」
+  function freeRemainText(ym, used) {
+    var todayStr = formatDate(new Date());
+    var open = (state.slots || []).some(function(s) { return s.date.slice(0, 7) === ym && s.date >= todayStr && s.remaining > 0; });
+    var published = (state.slots || []).some(function(s) { return s.date.slice(0, 7) === ym; });
+    if (used >= FREE_MAX) return FREE_MAX + '回とも予約済みです';
+    if (!published) return 'まだ予約できる日が出ていません';
+    if (!open) return '';
+    return 'あと' + (FREE_MAX - used) + '回予約できます';
+  }
+
   function startFreeBookingFlow(student) {
     state.student = student;
-    state.freeBookings = (student.freeBookings || []).map(function(b) {
+    // 過ぎた日の予約（freePast）は、その月の回数には数えるが、直さない・送り直さない。
+    // 送り直すと、サーバーは「これからの分だけ消して入れ直す」ので、過ぎた日が二重になる（2026-11-09 修正）
+    var todayStr = formatDate(new Date());
+    var all = (student.freeBookings || []).map(function(b) {
       return { date: b.date, time: b.time, isExisting: true };
     });
+    state.freePast = all.filter(function(b) { return b.date < todayStr; });
+    state.freeBookings = all.filter(function(b) { return b.date >= todayStr; });
+    state.freeOrig = state.freeBookings.slice();
     state.freeSelectedDate = null;
     var now = new Date();
     state.freeCalViewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1833,8 +1871,9 @@
       });
       return;
     }
-    if (state.freeBookings.length >= FREE_MAX) {
-      showError('freeCalError', '月' + FREE_MAX + '日が上限です。既存の予約をキャンセルしてから追加してください。');
+    // 月ごとに3回まで（その月の過ぎた日も数える）。前は全部の月をまとめて数えていた（2026-11-09 修正）
+    if (freeUsedIn(dateStr.slice(0, 7), freeAllDates()) >= FREE_MAX) {
+      showError('freeCalError', (dateObj.getMonth() + 1) + '月は' + FREE_MAX + '回まで予約できます。ほかの日を外してから選んでください。');
       return;
     }
     hideError('freeCalError');
@@ -1885,9 +1924,15 @@
     var countEl = document.getElementById('freeBookedCount');
     var submitBtn = document.getElementById('freeSubmitBtn');
     var count = state.freeBookings.length;
-    countEl.textContent = count;
-    var summaryCount = countEl.parentNode;
-    if (summaryCount) summaryCount.classList.toggle('full', count >= FREE_MAX);
+    // 表示中の月の「○月の予約 2 / 3回・あと1回」（2026-11-09）
+    var view = state.freeCalViewMonth || new Date();
+    var ym = formatDate(new Date(view.getFullYear(), view.getMonth(), 1)).slice(0, 7);
+    var used = freeUsedIn(ym, freeAllDates());
+    var done = freeUsedIn(ym, (state.freePast || []).map(function(b) { return b.date; }));   // 一覧に出ない、済んだ日
+    countEl.innerHTML = (view.getMonth() + 1) + '月の予約　' + used + ' / ' + FREE_MAX + '回' +
+      (done ? '<span class="fb-done">（済んだ' + done + '回をふくむ）</span>' : '') +
+      '<small>' + freeRemainText(ym, used) + '</small>';   // 決まった文だけ（入力された文字は入らない）
+    countEl.classList.toggle('full', used >= FREE_MAX);
     if (count === 0) {
       listEl.innerHTML = '<div class="free-summary-empty">まだ予約がありません。カレンダーから日にちを選んでください。</div>';
     } else {
@@ -1904,7 +1949,7 @@
         '</div>';
       }).join('');
     }
-    var origBookings = (state.student && state.student.freeBookings) || [];
+    var origBookings = state.freeOrig || [];   // これからの予約だけと比べる（過ぎた日は直さない）
     var hasChange = state.freeBookings.some(function(b) { return !b.isExisting; });
     var hasRemoval = origBookings.some(function(orig) {
       return !state.freeBookings.filter(function(b) { return b.date === orig.date && b.time === orig.time; })[0];
@@ -1948,7 +1993,8 @@
       // ローカルの生データも更新（再表示時の整合）
       var raw = findStudent(state.student.sid);
       if (raw) {
-        raw.bookings = payload.map(function(b) {
+        // 過ぎた日の予約はサーバーに残っているので、手元にも残す（カレンダー・回数に要る）
+        raw.bookings = (state.freePast || []).concat(payload).map(function(b) {
           return { absentDate:'', absentTime:'', newDate:b.date, newTime:b.time, bookingType:'free' };
         });
       }
