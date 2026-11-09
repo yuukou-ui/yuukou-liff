@@ -1271,9 +1271,12 @@
     var free = st.classType === 'free';
     document.getElementById('mcTitle').textContent = st.name + 'さんのお稽古日';
     document.getElementById('mcSub').textContent = free
-      ? '予約した日が出ます。予約を変えるときは、下のボタンからどうぞ。'
+      ? '予約した日が出ます。予約や変更は、下のボタンからどうぞ。'
       : 'お休みや振替は、下のボタンからどうぞ。';
-    document.getElementById('mcNewBtn').textContent = free ? '予約を変える' : '振替を予約する';
+    // フリーの方：これからの予約がまだ無ければ「予約する」、あれば「予約を変更する」（2026-11-09 運営者）
+    var todayStr = formatDate(new Date());
+    var hasUpcoming = free && Object.keys(mcEvents(st).makeup).some(function(d) { return d >= todayStr; });
+    document.getElementById('mcNewBtn').textContent = free ? (hasUpcoming ? '予約を変更する' : '予約する') : '振替を予約する';
     document.getElementById('mcNewBtn').style.display = leaveNow(st) ? 'none' : '';
     document.getElementById('mcSibBtn').style.display = (state.students && state.students.length > 1) ? 'block' : 'none';
     var body = document.getElementById('mcBody');
