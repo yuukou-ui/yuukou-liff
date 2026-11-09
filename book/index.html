@@ -562,6 +562,16 @@
     .cal-cell.mc-closed .num { color: #b91c1c; }
     .cal-cell.mc-closed .badge { background: #dc2626; color: #fff; }
     .cal-cell.mc-leave .badge { background: var(--gray-light); color: #fff; }
+    /* 日付の上に種類、下に時刻（2026-11-09） */
+    #mcBody .cal-cell { aspect-ratio: auto; min-height: 54px; }
+    #mcBody .mc-tag { position: absolute; top: 4px; font-size: 9px; font-weight: 800; line-height: 1; padding: 2px 4px; border-radius: 6px; color: #fff; }
+    #mcBody .mc-time { position: absolute; bottom: 4px; font-size: 10px; font-weight: 800; line-height: 1; letter-spacing: -0.2px; }
+    #mcBody .mc-lesson .mc-time { color: #1d4ed8; }
+    #mcBody .mc-makeup .mc-tag { background: var(--green); }
+    #mcBody .mc-makeup .mc-time { color: #15803d; }
+    #mcBody .mc-off .mc-tag { background: var(--gray); }
+    #mcBody .mc-closed .mc-tag { background: #dc2626; }
+    #mcBody .mc-leave .mc-tag { background: var(--gray-light); }
     .mc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-light); margin: 14px 2px 20px; }
     .mc-legend span { display: inline-flex; align-items: center; gap: 5px; }
     .mc-legend i { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid transparent; display: inline-block; }
@@ -1324,7 +1334,9 @@
     cell.className = 'cal-cell';
     var num = document.createElement('span'); num.className = 'num'; num.textContent = date.getDate(); cell.appendChild(num);
     var ds = formatDate(date);
-    var badge = function(t) { var b = document.createElement('span'); b.className = 'badge'; b.textContent = t; cell.appendChild(b); };
+    // 日付の上に種類（振替・休み など）、下に始まる時刻（2026-11-09 運営者）
+    var tag = function(t) { var b = document.createElement('span'); b.className = 'mc-tag'; b.textContent = t; cell.appendChild(b); };
+    var time = function(t) { var s = mcStartLabel(t); if (!s) return; var b = document.createElement('span'); b.className = 'mc-time'; b.textContent = s; cell.appendChild(b); };
     var isToday = date.getTime() === today.getTime();
     var past = date.getTime() < today.getTime() || (isToday && lesson[ds] && isPastRegularStart(st.regularTime) && !ev.makeup[ds]);
     if (isToday) cell.classList.add('today');
@@ -1332,18 +1344,25 @@
     // 赤い「休講」は、先生都合の休講（振替が付く）だけ。月3回のきまりで元から無い日は、何も付けない
     var closed = !!(off && off.closure);
     if (mk) {
-      cell.classList.add('mc-makeup'); badge(mk.free ? '予約' : '振替');
+      cell.classList.add('mc-makeup'); tag(mk.free ? '予約' : '振替'); time(mk.time);
     } else if (closed) {
-      cell.classList.add('mc-closed'); badge('休講');
+      cell.classList.add('mc-closed'); tag('休講');
     } else if (off) {
-      cell.classList.add('mc-off'); badge('休み');   // closure 以外のお休み
+      cell.classList.add('mc-off'); tag('休み');   // closure 以外のお休み
     } else if (lesson[ds] && inLeaveMonth(ds)) {
-      cell.classList.add('mc-leave'); badge('休会');
+      cell.classList.add('mc-leave'); tag('休会');
     } else if (lesson[ds]) {
-      cell.classList.add('mc-lesson'); badge(shortStartHour(st.regularTime));
+      cell.classList.add('mc-lesson'); time(st.regularTime);
     }
     if (past) cell.classList.add('past');
     return cell;
+  }
+
+  // "17:00-18:00" → "17時"、"15:30-16:30" → "15:30"
+  function mcStartLabel(timeStr) {
+    var m = String(timeStr || '').match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return '';
+    return m[2] === '00' ? parseInt(m[1], 10) + '時' : parseInt(m[1], 10) + ':' + m[2];
   }
 
   function mcNewBooking() {
