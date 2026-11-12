@@ -538,7 +538,6 @@
     .sr-hint { font-size: 13px; line-height: 1.6; color: var(--text-light); margin: 8px 2px 20px; }
     .sr-days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
     .sr-day { min-height: 48px; border: 1.5px solid #d1d5db; border-radius: 12px; background: #fff; color: var(--text); font-size: 17px; font-weight: 700; font-family: inherit; cursor: pointer; padding: 0; transition: all 0.15s; }
-    .sr-day.free { grid-column: 1 / -1; font-size: 15px; font-weight: 600; }
     .sr-day.on { background: var(--navy); border-color: var(--navy); color: #fff; box-shadow: 0 2px 8px rgba(26,41,64,0.25); }
     .sr-list { margin: 0 0 22px 1.2em; color: var(--text); font-size: 15px; line-height: 1.8; }
     .sr-done-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--green-bg); color: var(--green); font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
@@ -1151,11 +1150,11 @@
   function srRenderDays() {
     var box = document.getElementById('srDays');
     box.innerHTML = '';
-    ['月', '火', '水', '木', '土', 'フリー'].forEach(function(d) {   // お稽古のある曜日だけ（金・日はない。2026-11-08 運営者）
+    ['月', '火', '水', '木', '土'].forEach(function(d) {   // お稽古のある曜日だけ（金・日はない。2026-11-08 運営者）。「フリー」のボタンは外した（全員が曜日を持つ。2026-11-12 運営者）
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'sr-day' + (d === 'フリー' ? ' free' : '') + (sr.day === d ? ' on' : '');
-      b.textContent = d === 'フリー' ? '曜日が決まっていない（フリー）' : d;
+      b.className = 'sr-day' + (sr.day === d ? ' on' : '');
+      b.textContent = d;
       b.setAttribute('aria-pressed', sr.day === d ? 'true' : 'false');
       b.onclick = function() { sr.day = d; hideError('srErr'); srRenderDays(); };
       box.appendChild(b);
@@ -1212,7 +1211,7 @@
       if (!res.data || !res.data.success) { showError('srAskErr', (res.data && res.data.message) || 'うまくいきませんでした。'); return; }
       // トークから開いているときは、生徒さんのメッセージとして先生のトークにも残す（教室の無料枠は使わない）
       if (canSelfReceipt()) {
-        var text = '【予約画面の登録のお願い】\n' + name + (sr.day ? '（' + (sr.day === 'フリー' ? 'フリー' : sr.day + '曜') + '）' : '') + '\n予約画面を使えるようにしてください。';
+        var text = '【予約画面の登録のお願い】\n' + name + (sr.day ? '（' + sr.day + '曜）' : '') + '\n予約画面を使えるようにしてください。';
         try { liff.sendMessages([{ type: 'text', text: text }]).catch(function() {}); } catch (e) {}
       }
       showScreenById('screenRegAsked');
@@ -1293,7 +1292,7 @@
     var lesson = {}, pubMonths = {};
     (state.slots || []).forEach(function(s) {
       pubMonths[s.date.slice(0, 7)] = true;
-      if (s.time === st.regularTime && s.dayName === st.regularDay) lesson[s.date] = true;   // 自分のクラス（曜日と時間）の枠がある日だけ
+      if (s.dayName === st.regularDay) lesson[s.date] = true;   // 自分の曜日に開講している日（時刻の文字は比べない。名簿の時間は 15:00-15:40・15:40-16:20 など、枠の時刻と同じとは限らない。2026-11-12）
     });
     var now = new Date();
     for (var k = 0; k < 2; k++) {
@@ -2162,7 +2161,7 @@
       } else if (state.absentDate === dateStr) {
         cell.classList.add('selected-absent');
         addBadge(startHour);
-        var otherSlots = openSlots.filter(function(s) { return s.time !== state.student.regularTime; });
+        var otherSlots = openSlots.filter(function(s) { return !ownTimeHit(state.student.regularTime, s.time, true); });
         if (otherSlots.length > 0) {
           cell.onclick = (function(s) { return function() { handleMakeupTap(s); }; })(dateStr);
           cell.style.cursor = 'pointer';
@@ -2180,7 +2179,7 @@
         } else {
           cell.classList.add('my-day');
           addBadge(startHour);
-          var otherTimeSlots = openSlots.filter(function(s) { return s.time !== state.student.regularTime; });
+          var otherTimeSlots = openSlots.filter(function(s) { return !ownTimeHit(state.student.regularTime, s.time, false); });
           if (otherTimeSlots.length > 0) {
             cell.onclick = (function(s) { return function() { handleMakeupTap(s); }; })(dateStr);
             cell.style.cursor = 'pointer';
@@ -2202,11 +2201,27 @@
     return cell;
   }
 
+  // 振替先の枠が、本人がいつもいる時間に当たるか（2026-11-12。時刻の文字ではなく、時間の重なりで見分ける）
+  //   onAbsentDay（お休みするその日）：お休みする枠そのもの（始まりが同じ）だけ当たり
+  //   ほかの自分の曜日の日：振替で座る時間（枠の始まり＋自分の長さ）が、いつもの時間と重なれば当たり
+  // サーバー（Code.gs の ownTimeClash_）と管理画面（admin.html の ownTimeHit）と同じ決まり
+  function ownTimeHit(regularTime, slotTime, onAbsentDay) {
+    var parse = function(t) {   // サーバーの timeToMinutes_ と同じ読み方
+      var parts = String(t || '').split('-');
+      if (parts.length !== 2) return null;
+      var a = parts[0].trim().split(':'), b = parts[1].trim().split(':');
+      var s = (parseInt(a[0], 10) || 0) * 60 + (parseInt(a[1], 10) || 0), e = (parseInt(b[0], 10) || 0) * 60 + (parseInt(b[1], 10) || 0);
+      return e > s ? { s: s, e: e } : null;
+    };
+    var reg = parse(regularTime), slot = parse(slotTime);
+    if (!reg || !slot) return String(slotTime) === String(regularTime);
+    if (onAbsentDay) return slot.s === reg.s;
+    return slot.s < reg.e && slot.s + (reg.e - reg.s) > reg.s;
+  }
+
+  // "17:00-18:00" → "17時"、"15:40-16:20" → "15:40"（途中の時刻からの振替・途中から始まるクラスは、分まで出す。2026-11-12）
   function shortStartHour(timeStr) {
-    if (!timeStr) return '';
-    var head = timeStr.split('-')[0];
-    var h = parseInt(head.split(':')[0]);
-    return isNaN(h) ? '' : h + '時';
+    return mcStartLabel(timeStr);
   }
 
   function isPastRegularStart(timeStr) {
@@ -2292,7 +2307,7 @@
       if (s.date !== dateStr) return false;
       var k = s.date + '_' + s.time;
       if (booked.indexOf(k) >= 0 || s.remaining <= 0) return false;
-      if (isMyRegularDay && s.time === state.student.regularTime) return false;
+      if (isMyRegularDay && ownTimeHit(state.student.regularTime, s.time, isAbsentDay)) return false;
       return true;
     });
     var container = document.getElementById('calTimeSlots');
