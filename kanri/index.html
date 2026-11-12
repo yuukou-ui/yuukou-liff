@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>優光書道教室 振替予約 管理</title>
 <!-- ホーム画面に追加したときのアイコン（Mac版アプリと同じ絵柄） -->
 <link rel="apple-touch-icon" sizes="512x512" href="icon.png">
@@ -68,7 +69,7 @@
   <a class="big-btn" href="#" onclick="openSheet(); return false;">
     <span class="icon sheet">📊</span>
     <span class="main">予約データ表（スプレッドシート）
-      <span class="sub">生徒の名簿・登録リンクの発行</span>
+      <span class="sub">生徒の名簿</span>
     </span>
     <span class="arrow">›</span>
   </a>
@@ -97,7 +98,25 @@
 <script>
   var ADMIN_URL = 'https://script.google.com/macros/s/AKfycbzyCJJ3IfXpPluaZ6LQqjeDKlhu0amXLvp8fCv59CxIMMl0ic8SjuqbtIsbhwbZ_6S8/exec?page=admin';
 
-  function openAdmin() { window.open(ADMIN_URL, '_blank'); }
+  // 入口の鍵：メールのリンクの #k=…（32文字の16進）。アドレスの #k= は消さない（ブックマークに鍵が入る）。
+  // 無ければ、この端末に覚えた鍵。どちらも無ければ今までどおり開く（鍵をかけたあとはサーバーが文で案内する）
+  function adminKey() {
+    var m = /(?:^#|&)k=([0-9a-f]{32})(?:&|$)/.exec(location.hash || '');
+    if (m) {
+      try { localStorage.setItem('kanri_admin_key', m[1]); } catch (e) {}
+      return m[1];
+    }
+    try {
+      var s = localStorage.getItem('kanri_admin_key') || '';
+      return /^[0-9a-f]{32}$/.test(s) ? s : '';
+    } catch (e) { return ''; }
+  }
+  adminKey();
+
+  function openAdmin() {
+    var k = adminKey();
+    window.open(ADMIN_URL + (k ? '&k=' + k : ''), '_blank');
+  }
 
   function openSheet() {
     var url = localStorage.getItem('kanri_sheet_url');

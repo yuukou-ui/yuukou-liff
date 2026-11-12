@@ -1609,7 +1609,7 @@
         btn.textContent = 'キャンセル';
         btn.onclick = (function(ad) { return function() { cancelBooking(ad); }; })(b.absentDate);
         row.appendChild(info);
-        row.appendChild(btn);
+        if (canCancelMakeup(b.newDate, b.newTime)) row.appendChild(btn);   // 振替先のお稽古が始まったあとは出さない（サーバーも断る）
         container.appendChild(row);
       });
     }
@@ -1657,6 +1657,13 @@
     if (absentDate > today) return true;
     if (absentDate < today) return false;
     return !isPastRegularStart(state.student.regularTime);
+  }
+  // 確定した振替をキャンセルできるのは、振替先のお稽古が始まる前まで（2026-11-12。サーバーの cancelReschedule_ と同じ決まり）
+  function canCancelMakeup(newDate, newTime) {
+    var today = formatDate(new Date());
+    if (newDate > today) return true;
+    if (newDate < today) return false;
+    return !isPastRegularStart(newTime);
   }
 
   function cancelBooking(absentDate, isPending) {
@@ -2103,7 +2110,7 @@
     var daySlots = state.slots.filter(function(s) { return s.date === dateStr; });
     var openSlots = daySlots.filter(function(s) {
       var k = s.date + '_' + s.time;
-      return booked.indexOf(k) < 0 && s.remaining > 0;
+      return booked.indexOf(k) < 0 && s.remaining > 0 && !ownBookedHit(booked, state.student.regularTime, s.date, s.time);
     });
 
     var startHour = shortStartHour(state.student.regularTime);
@@ -2219,6 +2226,30 @@
     return slot.s < reg.e && slot.s + (reg.e - reg.s) > reg.s;
   }
 
+  // その日にもう持っている自分の予約（振替・昔のフリー）と、教室にいる時間が重なる枠か（2026-11-12）
+  //   教室にいる時間＝始まり〜始まり＋自分の長さ（通常時間が読めないときは、その枠の長さ）。1分でも重なれば当たり・ぴったり続くのはよい
+  // サーバー（Code.gs の ownBookedClash_）と同じ決まり。tests/own_booked.test.js が照らし合わせる
+  function ownBookedHit(bookedSlots, regularTime, dateStr, slotTime) {
+    var parse = function(t) {   // サーバーの timeToMinutes_ と同じ読み方
+      var parts = String(t || '').split('-');
+      if (parts.length !== 2) return null;
+      var a = parts[0].trim().split(':'), b = parts[1].trim().split(':');
+      var s = (parseInt(a[0], 10) || 0) * 60 + (parseInt(a[1], 10) || 0), e = (parseInt(b[0], 10) || 0) * 60 + (parseInt(b[1], 10) || 0);
+      return e > s ? { s: s, e: e } : null;
+    };
+    var reg = parse(regularTime), slot = parse(slotTime);
+    if (!slot) return false;
+    var s0 = slot.s, e0 = slot.s + (reg ? reg.e - reg.s : slot.e - slot.s);
+    return (bookedSlots || []).some(function(key) {
+      var k = String(key), i = k.indexOf('_');
+      if (i < 0 || k.slice(0, i) !== dateStr) return false;
+      var t = parse(k.slice(i + 1));
+      if (!t) return false;
+      var e1 = t.s + (reg ? reg.e - reg.s : t.e - t.s);
+      return t.s < e0 && e1 > s0;
+    });
+  }
+
   // "17:00-18:00" → "17時"、"15:40-16:20" → "15:40"（途中の時刻からの振替・途中から始まるクラスは、分まで出す。2026-11-12）
   function shortStartHour(timeStr) {
     return mcStartLabel(timeStr);
@@ -2307,6 +2338,7 @@
       if (s.date !== dateStr) return false;
       var k = s.date + '_' + s.time;
       if (booked.indexOf(k) >= 0 || s.remaining <= 0) return false;
+      if (ownBookedHit(booked, state.student.regularTime, s.date, s.time)) return false;   // 自分のほかの予約と重なる（続けて受けるのはよい）
       if (isMyRegularDay && ownTimeHit(state.student.regularTime, s.time, isAbsentDay)) return false;
       return true;
     });
