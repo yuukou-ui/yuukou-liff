@@ -1603,7 +1603,7 @@
         var info = document.createElement('div');
         info.className = 'home-booking-info';
         info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + (b.closure ? ' の休講' : ' のお休み') + '</div>' +
-          '<div class="home-booking-new">振替先：' + formatDateLabel(b.newDate) + '　' + b.newTime + '</div>';
+          '<div class="home-booking-new">振替先：' + formatDateLabel(b.newDate) + '　' + myTime(b.newTime) + '</div>';
         var btn = document.createElement('button');
         btn.className = 'home-cancel-btn';
         btn.textContent = 'キャンセル';
@@ -2255,6 +2255,26 @@
     return mcStartLabel(timeStr);
   }
 
+  // 振替先の時間を、その人自身の長さで出す（2026-11-14。サーバーの ownTimeLabel_ と同じ決まり）。
+  // 例：枠 17:00-18:00・いつも80分 → 17:00-18:20。サーバーに送る時間（state.newTime）は枠のまま
+  function ownTimeLabel(slotTime, regularTime) {
+    var mm = function(t) {
+      var p = String(t || '').split('-');
+      if (p.length !== 2) return null;
+      var a = p[0].trim().split(':'), b = p[1].trim().split(':');
+      var s = (parseInt(a[0], 10) || 0) * 60 + (parseInt(a[1], 10) || 0);
+      var e = (parseInt(b[0], 10) || 0) * 60 + (parseInt(b[1], 10) || 0);
+      return e > s ? { s: s, e: e } : null;
+    };
+    var t = mm(slotTime), r = mm(regularTime), len = r ? r.e - r.s : 0;
+    if (!t || !(len > 0) || t.e - t.s === len) return String(slotTime || '');
+    var end = t.s + len;
+    return String(slotTime).split('-')[0].trim() + '-' + Math.floor(end / 60) + ':' + ('0' + (end % 60)).slice(-2);
+  }
+  function myTime(slotTime) {
+    return ownTimeLabel(slotTime, state.student && state.student.regularTime);
+  }
+
   function isPastRegularStart(timeStr) {
     if (!timeStr) return false;
     var head = timeStr.split('-')[0].split(':');
@@ -2349,10 +2369,10 @@
 
     if (slots.length === 1) {
       state.newTime = slots[0].time;
-      state.newDateDisplay = dateLabel + ' ' + slots[0].time;
+      state.newDateDisplay = dateLabel + ' ' + myTime(slots[0].time);
       container.innerHTML = '<div class="cal-slots">' +
         '<div class="cal-slots-title">' + dateLabel + ' の時間（残り ' + slots[0].remaining + ' 枠）</div>' +
-        '<div class="cal-slot-grid"><button class="cal-slot-btn selected">' + slots[0].time + '</button></div>' +
+        '<div class="cal-slot-grid"><button class="cal-slot-btn selected">' + myTime(slots[0].time) + '</button></div>' +
       '</div>';
       renderCalendar();
       updateCalSummary();
@@ -2362,7 +2382,7 @@
     var slotsHtml = slots.map(function(s) {
       var sel = (state.newTime === s.time) ? ' selected' : '';
       return '<button class="cal-slot-btn' + sel + '" onclick="selectCalTime(\'' + s.time + '\',' + s.remaining + ')">' +
-        s.time + '<span class="cal-slot-remaining">残り ' + s.remaining + ' 枠</span></button>';
+        myTime(s.time) + '<span class="cal-slot-remaining">残り ' + s.remaining + ' 枠</span></button>';
     }).join('');
     container.innerHTML = '<div class="cal-slots">' +
       '<div class="cal-slots-title">' + dateLabel + ' の時間を選んでください</div>' +
@@ -2372,7 +2392,7 @@
 
   function selectCalTime(time, remaining) {
     state.newTime = time;
-    state.newDateDisplay = formatDateLabel(state.newDate) + ' ' + time;
+    state.newDateDisplay = formatDateLabel(state.newDate) + ' ' + myTime(time);
     renderTimeSlots(state.newDate);
     renderCalendar();
     updateCalSummary();
