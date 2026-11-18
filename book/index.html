@@ -498,6 +498,14 @@
     .home-expired .home-booking-absent { color: var(--gray); text-decoration: line-through; }
     .home-expired-tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--red); background: var(--red-bg); border-radius: 6px; padding: 2px 7px; margin-left: 6px; text-decoration: none; }
     .home-expired-reason { font-size: 12px; color: var(--text-light); margin-top: 5px; line-height: 1.55; }
+    /* ホーム：これまでの振替（過ぎたもの。たたんでおく 2026-11-18） */
+    .home-past { margin-top: 18px; }
+    .home-past > summary { list-style: none; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-light); padding: 10px 2px; }
+    .home-past > summary::-webkit-details-marker { display: none; }
+    .home-past > summary::before { content: '▸'; display: inline-block; width: 1.2em; transition: transform .15s; }
+    .home-past[open] > summary::before { transform: rotate(90deg); }
+    .home-past .home-booking { background: var(--border-soft); padding: 10px 14px; margin-bottom: 8px; }
+    .home-past .home-booking-absent { font-size: 14px; color: var(--text-light); }
     /* カレンダー：あとで選ぶ／期限外の日 */
     .btn-later { background: white; color: var(--navy); border: 1.5px solid var(--navy); }
     .btn-later:active { background: var(--border-soft); }
@@ -1520,8 +1528,10 @@
     document.getElementById('homeGreeting').textContent = student.name + 'さん、' + greetingNow();
     var container = document.getElementById('homeBookings');
     container.innerHTML = '';
-    var pending = bookings.filter(function(b) { return b.pending; });
-    var confirmed = bookings.filter(function(b) { return !b.pending; });
+    // 過ぎた振替・期限が切れて30日たったお休みは「これまでの振替」へ（2026-11-18。ホームに積み上がらないように）
+    var groups = homeGroups(bookings, formatDate(new Date()), function(b) { return daysLeft(b.deadline || deadlineFor(b.absentDate)); });
+    var pending = groups.pending;
+    var confirmed = groups.upcoming;
 
     // --- 休会：いま休会中なら予約とお休みの登録を止める。これから休会なら、その月の日は選べないことを知らせる ---
     var lv = student.leave;
@@ -1591,7 +1601,7 @@
       ct.textContent = '振替予約';
       container.appendChild(ct);
     }
-    if (bookings.length === 0) {
+    if (pending.length === 0 && confirmed.length === 0) {
       var empty = document.createElement('div');
       empty.className = 'home-empty';
       empty.textContent = '現在、振替予約はありません。';
@@ -1613,10 +1623,50 @@
         container.appendChild(row);
       });
     }
+    if (groups.past.length > 0) {
+      var past = document.createElement('details');
+      past.className = 'home-past';
+      var sum = document.createElement('summary');
+      sum.textContent = 'これまでの振替（' + groups.past.length + '件）';
+      past.appendChild(sum);
+      groups.past.forEach(function(b) {
+        var row = document.createElement('div');
+        row.className = 'home-booking';
+        var info = document.createElement('div');
+        info.className = 'home-booking-info';
+        info.innerHTML = '<div class="home-booking-absent">' + formatDateLabel(b.absentDate) + (b.closure ? ' の休講' : ' のお休み') + '</div>' +
+          '<div class="home-booking-new">' + (b.pending ? '振替先：選ばないまま期限切れ（' + deadlineLabel(b.deadline || deadlineFor(b.absentDate)) + 'まで）'
+                                                         : '振替先：' + formatDateLabel(b.newDate) + '　' + myTime(b.newTime)) + '</div>';
+        row.appendChild(info);
+        past.appendChild(row);
+      });
+      container.appendChild(past);
+    }
     document.getElementById('homeBackToSiblingBtn').style.display =
       (state.students && state.students.length > 1) ? 'block' : 'none';
     for (var i = 1; i <= 3; i++) { document.getElementById('step' + i).className = 'step-item'; }
     showScreenById('screenHome');
+  }
+
+  // ホームの並べ分け（2026-11-18）。today は 'yyyy/MM/dd'、leftOf(b) は振替先が未定のお休みの「期限まであと何日」
+  // pending＝振替先が未定のお休み（期限切れも30日までは理由つきでここ）／upcoming＝振替先が今日以降（早い順）／
+  // past＝振替先が昨日まで・期限が切れて30日をこえたお休み（新しい順）。サーバーは全部を返したまま（カレンダーの印に使う）
+  function homeGroups(bookings, today, leftOf) {
+    var KEEP_EXPIRED_DAYS = 30;
+    var g = { pending: [], upcoming: [], past: [] };
+    var key = function(b) { return String(b.newDate || b.absentDate || ''); };
+    (bookings || []).forEach(function(b) {
+      if (b.pending) {
+        if (leftOf(b) >= -KEEP_EXPIRED_DAYS) g.pending.push(b); else g.past.push(b);
+      } else if (String(b.newDate || '') >= today) {
+        g.upcoming.push(b);
+      } else {
+        g.past.push(b);
+      }
+    });
+    g.upcoming.sort(function(a, b) { return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0; });
+    g.past.sort(function(a, b) { return key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0; });
+    return g;
   }
 
   function goToNewBooking() {
