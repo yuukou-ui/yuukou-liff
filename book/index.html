@@ -548,6 +548,13 @@
     .sr-day { min-height: 48px; border: 1.5px solid #d1d5db; border-radius: 12px; background: #fff; color: var(--text); font-size: 17px; font-weight: 700; font-family: inherit; cursor: pointer; padding: 0; transition: all 0.15s; }
     .sr-day.on { background: var(--navy); border-color: var(--navy); color: #fff; box-shadow: 0 2px 8px rgba(26,41,64,0.25); }
     .sr-list { margin: 0 0 22px 1.2em; color: var(--text); font-size: 15px; line-height: 1.8; }
+    .sr-entered { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; background: var(--border-soft); border-radius: 12px; padding: 10px 14px; margin: 4px 0 12px; font-size: 15px; line-height: 1.7; }
+    .sr-entered > span { color: var(--text-light); font-size: 13px; }
+    .sr-entered b { color: var(--navy); word-break: break-all; }
+    .sr-opt-p { font-size: 14px; line-height: 1.7; color: var(--text); margin: 0 0 12px; }
+    .sr-locked { color: #92400e; margin: 10px 0 0; }
+    .sr-or { font-size: 13px; font-weight: 700; color: var(--navy); text-align: center; margin: 22px 0 8px; }
+    .sr-hint.sr-center { margin: 8px 0 0; }
     .sr-done-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--green-bg); color: var(--green); font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
     .sr-center { text-align: center; }
     .sr-names { white-space: pre-line; font-size: 18px; font-weight: 700; color: var(--navy); margin: 4px 0 18px; text-align: center; line-height: 1.6; }
@@ -800,19 +807,18 @@
     </div>
   </div>
 
-  <!-- はじめての登録：ここからはできなかった -->
+  <!-- はじめての登録：ここからはできなかった（2026-11-21 見直し：入力した内容を見せ、直す・先生にお願い の2つを小さい画面でも1画面に） -->
   <div class="screen" id="screenRegFail">
     <div class="card">
-      <h2>登録できませんでした</h2>
-      <p class="subtitle">次のようなときは、先生にお願いしてください。</p>
-      <ul class="sr-list">
-        <li>お名前の字が、教室の名簿と少しちがう</li>
-        <li>同じ生徒さんが、もう別のスマホやご家族の LINE で登録している</li>
-      </ul>
+      <h2>まだ登録できていません</h2>
+      <div class="sr-entered"><span>入力した内容</span><b><span id="srFailName"></span><span id="srFailDay"></span></b></div>
+      <p class="sr-opt-p">お名前の漢字（「高」と「髙」など）や曜日が、教室の名簿とちがうと登録できません。</p>
+      <button class="btn btn-secondary" id="srRetryBtn" onclick="srRetry()">直して入れなおす</button>
+      <p class="sr-opt-p sr-locked" id="srLocked" style="display:none;">入力のまちがいが続いたため、入れなおしは1時間ほど止めています。</p>
+      <div class="sr-or">わからないとき<br>ご家族の LINE で登録ずみのとき</div>
       <div class="error-msg" id="srAskErr"></div>
       <button class="btn btn-primary" id="srAskBtn" onclick="srAsk()">先生にお願いする</button>
-      <button class="btn btn-back" id="srRetryBtn" onclick="srRetry()">&#8249; 入れなおす</button>
-      <p class="sr-hint" id="srLocked" style="display:none;">入力のまちがいが続いたため、入れなおしは1時間ほど止めています。</p>
+      <p class="sr-hint sr-center">先生が使えるようにして、この LINE でお知らせします。</p>
     </div>
   </div>
 
@@ -1197,6 +1203,8 @@
 
   function srShowFail(locked) {
     hideError('srAskErr');
+    document.getElementById('srFailName').textContent = document.getElementById('srName').value.trim();
+    document.getElementById('srFailDay').textContent = sr.day ? '（' + sr.day + '曜日）' : '';
     document.getElementById('srRetryBtn').style.display = locked ? 'none' : 'block';
     document.getElementById('srLocked').style.display = locked ? 'block' : 'none';
     showScreenById('screenRegFail');
