@@ -41,6 +41,16 @@
   .help-row:first-of-type { border-top:none; }
   .help-what { min-width:96px; font-weight:700; color:var(--navy); flex-shrink:0; }
   .help-how b { color:var(--blue); }
+  .pk-alt { text-align:center; margin:-2px 0 14px; min-height:4px; }
+  .pk-alt a { color:var(--gray); font-size:13px; text-decoration:none; padding:6px 10px; display:inline-block; }
+  .pk-msg { background:#fff; border-radius:12px; padding:12px 14px; margin:-2px 0 12px; font-size:13px; line-height:1.7; color:#92400e; box-shadow:0 2px 10px rgba(0,0,0,.05); }
+  .pk-msg.ok { color:#15803d; }
+  .pk-setup { display:flex; gap:8px; margin:-2px 0 12px; }
+  .pk-setup[hidden], .pk-msg[hidden] { display:none; }
+  .pk-setup input { flex:1; min-width:0; font-size:16px; padding:12px 14px; border:1.5px solid #d1d5db; border-radius:12px; font-family:inherit; background:#fff; }
+  .pk-setup button { font-size:15px; font-weight:700; padding:0 16px; border:none; border-radius:12px; background:var(--navy); color:#fff; font-family:inherit; white-space:nowrap; }
+  .pk-setup button:disabled { opacity:.5; }
+  .big-btn.busy { opacity:.6; pointer-events:none; }
   .foot { text-align:center; font-size:11px; color:#9ca3af; margin-top:22px; line-height:1.8; }
   .foot a { color:var(--blue); text-decoration:none; }
 </style>
@@ -58,13 +68,20 @@
     次からはホーム画面のアイコンから、パソコンと同じ画面で使えます。
   </div>
 
-  <a class="big-btn" href="#" onclick="openAdmin(); return false;">
+  <a class="big-btn" id="adminBtn" href="#" onclick="mainOpen(); return false;">
     <span class="icon admin">🖥</span>
     <span class="main">管理画面をひらく
-      <span class="sub">予約の確認・開講日づくり・お知らせ送信</span>
+      <span class="sub" id="adminSub">予約の確認・開講日づくり・お知らせ送信</span>
     </span>
     <span class="arrow">›</span>
   </a>
+  <!-- 顔・指でひらく（2026-11-21）。登録はパスワードを知っている人だけ。顔や指のデータは端末から出ない -->
+  <div class="pk-msg" id="pkMsg" hidden></div>
+  <div class="pk-setup" id="pkSetup" hidden>
+    <input type="password" id="pkPass" placeholder="管理画面のパスワード" autocomplete="current-password" enterkeyhint="next">
+    <button type="button" id="pkGo" onclick="pkSetupStep()">次へ</button>
+  </div>
+  <div class="pk-alt"><a href="#" id="pkAlt" hidden onclick="pkAltTap(); return false;"></a></div>
 
   <a class="big-btn" href="#" onclick="openSheet(); return false;">
     <span class="icon sheet">📊</span>
@@ -117,6 +134,178 @@
     var k = adminKey();
     window.open(ADMIN_URL + (k ? '&k=' + k : ''), '_blank');
   }
+
+  // ======== 顔・指でひらく（パスキー・2026-11-21） ========
+  // 1回目：パスワード → 「この端末を登録」（端末の中に鍵ができ、サーバーには公開鍵だけが行く）。
+  // 2回目から：ボタン → 顔・指 → サーバーが署名を確かめ、2分・1回だけのチケットで管理画面をひらく。
+  var API_URL = ADMIN_URL.split('?')[0];
+  var PK_FLAG = 'kanri_pk';
+  var pkPre = null, pkRegCh = null;
+
+  function pkOn() { try { return localStorage.getItem(PK_FLAG) === '1'; } catch (e) { return false; } }
+  function pkSetFlag(v) { try { if (v) localStorage.setItem(PK_FLAG, '1'); else localStorage.removeItem(PK_FLAG); } catch (e) {} }
+  function enc(s) { return new TextEncoder().encode(s); }
+  function b64u(buf) {
+    var b = new Uint8Array(buf), s = '';
+    for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64u(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+    var t = atob(s), b = new Uint8Array(t.length);
+    for (var i = 0; i < t.length; i++) b[i] = t.charCodeAt(i);
+    return b;
+  }
+  function api(body) {
+    return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r || !r.ok) throw new Error((r && r.error) || 'error'); return r.data; });
+  }
+  function pkMsg(text, ok) {
+    var el = document.getElementById('pkMsg');
+    el.textContent = text || ''; el.hidden = !text; el.className = 'pk-msg' + (ok ? ' ok' : '');
+  }
+  function deviceName() {
+    var u = navigator.userAgent;
+    if (/iPhone/.test(u)) return 'iPhone';
+    if (/iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1)) return 'iPad';
+    if (/Macintosh/.test(u)) return 'Mac';
+    if (/Android/.test(u)) return 'Android';
+    if (/Windows/.test(u)) return 'Windows';
+    return '端末';
+  }
+  var REASON = {
+    gate: 'メールで届いた「管理画面の入口」のリンクから開いてください。',
+    locked: 'まちがいが続いたため、15分止まっています。15分たってから、もう一度押してください。',
+    token: 'パスワードが違います。',
+    full: '登録できる端末の数がいっぱいです。管理画面のいちばん下「顔・指で入れる端末」から、使わない端末を取り消してください。'
+  };
+
+  function pkRefresh() {
+    var on = pkOn(), alt = document.getElementById('pkAlt');
+    document.getElementById('adminSub').textContent = on ? '顔・指でひらく' : '予約の確認・開講日づくり・お知らせ送信';
+    if (on) { alt.textContent = 'パスワードでひらく'; alt.hidden = false; return; }
+    alt.hidden = true;
+    if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (yes) {
+        if (yes && !pkOn()) { alt.textContent = 'この端末を顔・指でひらけるようにする'; alt.hidden = false; }
+      }).catch(function () {});
+    }
+  }
+
+  // 顔・指の画面は「押した直後」にしか出せない（iPhone）。だからチャレンジは先にもらっておく（5分もつ・4分で取り直す）
+  function pkPrefetch() {
+    if (!pkOn()) return Promise.resolve(null);
+    return api({ action: 'pkBegin', k: adminKey() }).then(function (b) {
+      if (b && b.success) { pkPre = { ch: b.challenge, ids: b.ids, at: Date.now() }; return pkPre; }
+      if (b && b.reason === 'none') { pkSetFlag(false); pkRefresh(); }
+      pkPre = null; return b;
+    }).catch(function () { pkPre = null; return null; });
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && pkOn() && (!pkPre || Date.now() - pkPre.at > 240000)) pkPrefetch();
+  });
+
+  function mainOpen() {
+    if (!pkOn() || !window.PublicKeyCredential) { openAdmin(); return; }
+    pkMsg('');
+    var pre = pkPre;
+    if (!pre || Date.now() - pre.at > 240000) {
+      pkPrefetch().then(function (b) {
+        if (pkPre) pkMsg('もう一度「管理画面をひらく」を押してください。');
+        else if (b && b.reason === 'none') pkMsg('この端末の登録が取り消されています。下の「この端末を顔・指でひらけるようにする」から、もう一度登録してください。');
+        else pkMsg(b && REASON[b.reason] ? REASON[b.reason] : 'つながりませんでした。少し待って、もう一度押してください。');
+      });
+      return;
+    }
+    pkPre = null;
+    var btn = document.getElementById('adminBtn');
+    navigator.credentials.get({ publicKey: {
+      challenge: enc(pre.ch), rpId: location.hostname, userVerification: 'required', timeout: 60000,
+      allowCredentials: pre.ids.map(function (id) { return { type: 'public-key', id: unb64u(id) }; })
+    } }).then(function (cred) {
+      btn.classList.add('busy');
+      document.getElementById('adminSub').textContent = 'ひらいています…';
+      var r = cred.response;
+      return api({ action: 'pkLogin', k: adminKey(), id: b64u(cred.rawId),
+        clientDataJSON: b64u(r.clientDataJSON), authenticatorData: b64u(r.authenticatorData), signature: b64u(r.signature) });
+    }).then(function (r) {
+      if (r && r.success) {
+        var k = adminKey();
+        location.href = ADMIN_URL + (k ? '&k=' + k : '') + '&t=' + r.ticket;
+        return;
+      }
+      btn.classList.remove('busy'); pkRefresh(); pkPrefetch();
+      pkMsg(r && REASON[r.reason] ? REASON[r.reason] : '確かめられませんでした。もう一度押すか、下の「パスワードでひらく」からどうぞ。');
+    }).catch(function (e) {
+      btn.classList.remove('busy'); pkRefresh(); pkPrefetch();
+      if (e && e.name === 'NotAllowedError') return;   // 顔・指の画面で「キャンセル」
+      pkMsg('確かめられませんでした。もう一度押すか、下の「パスワードでひらく」からどうぞ。');
+    });
+  }
+
+  function pkAltTap() {
+    if (pkOn()) { openAdmin(); return; }
+    var box = document.getElementById('pkSetup');
+    box.hidden = !box.hidden;
+    pkMsg(''); pkRegCh = null;
+    document.getElementById('pkGo').textContent = '次へ';
+    if (!box.hidden) document.getElementById('pkPass').focus();
+  }
+  document.getElementById('pkPass').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !pkRegCh) pkSetupStep(); });
+
+  // 登録：1. パスワードを確かめてチャレンジをもらう → 2. 「顔・指を登録する」を押す（押した直後に顔・指の画面）
+  function pkSetupStep() {
+    var go = document.getElementById('pkGo'), pass = document.getElementById('pkPass').value.trim();
+    if (!pkRegCh) {
+      if (!pass) { document.getElementById('pkPass').focus(); return; }
+      go.disabled = true;
+      api({ action: 'pkBegin', k: adminKey(), token: pass, register: true }).then(function (b) {
+        go.disabled = false;
+        if (!b || !b.success) { pkMsg(b && REASON[b.reason] ? REASON[b.reason] : 'つながりませんでした。'); return; }
+        pkRegCh = b; pkMsg('');
+        go.textContent = '顔・指を登録する';
+      }).catch(function () { go.disabled = false; pkMsg('つながりませんでした。少し待って、もう一度押してください。'); });
+      return;
+    }
+    var b = pkRegCh; pkRegCh = null;
+    go.textContent = '次へ';
+    navigator.credentials.create({ publicKey: {
+      challenge: enc(b.challenge),
+      rp: { id: location.hostname, name: '優光書道教室 管理画面' },
+      user: { id: enc('yuukou-admin'), name: '優光書道教室 管理画面', displayName: '優光書道教室 管理画面' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' },
+      attestation: 'none', timeout: 120000,
+      excludeCredentials: b.ids.map(function (id) { return { type: 'public-key', id: unb64u(id) }; })
+    } }).then(function (cred) {
+      var r = cred.response;
+      if (!r.getPublicKey || r.getPublicKeyAlgorithm() !== -7) throw new Error('old');
+      go.disabled = true;
+      return api({ action: 'pkRegister', k: adminKey(), token: pass, id: b64u(cred.rawId), alg: -7,
+        publicKey: b64u(r.getPublicKey()), clientDataJSON: b64u(r.clientDataJSON), name: deviceName() });
+    }).then(function (r) {
+      go.disabled = false;
+      if (!r || !r.success) { pkMsg(r && REASON[r.reason] ? REASON[r.reason] : '登録できませんでした。もう一度お試しください。'); return; }
+      pkSetFlag(true);
+      document.getElementById('pkSetup').hidden = true;
+      document.getElementById('pkPass').value = '';
+      pkRefresh(); pkPrefetch();
+      pkMsg('登録しました。次から「管理画面をひらく」で、顔・指でひらきます。', true);
+    }).catch(function (e) {
+      go.disabled = false;
+      if (e && e.name === 'InvalidStateError') {   // この端末（同じ Apple アカウント）は、もう登録してある
+        pkSetFlag(true); document.getElementById('pkSetup').hidden = true; document.getElementById('pkPass').value = '';
+        pkRefresh(); pkPrefetch();
+        pkMsg('この端末は、もう登録されています。「管理画面をひらく」で、顔・指でひらきます。', true);
+        return;
+      }
+      if (e && e.name === 'NotAllowedError') { pkMsg(''); return; }
+      pkMsg(e && e.message === 'old' ? 'この端末のブラウザでは登録できません。パスワードでひらいてください。' : '登録できませんでした。もう一度お試しください。');
+    });
+  }
+  pkRefresh();
+  pkPrefetch();
 
   function openSheet() {
     var url = localStorage.getItem('kanri_sheet_url');
