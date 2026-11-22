@@ -1151,7 +1151,7 @@
       return _pre.then(function(){
         setStatus((regToken ? '⑤' : '④') + ' 生徒情報を確認中…');
         var _tApi = Date.now();
-        return callApi('myBookings').then(function(res) {
+        return callApi('myBookings', { withSlots: true }).then(function(res) {
           dbg('API応答 ' + ((Date.now() - _tApi) / 1000).toFixed(1) + 's: ' + JSON.stringify(res).slice(0, 80));
           return res;
         });
@@ -1165,6 +1165,8 @@
         return;
       }
       state.students = res.data.students || [];
+      // 生徒が1人なら、空き枠もいっしょに届く（開くときの通信を1回に・2026-11-22）
+      if (res.data.first) state.firstSlots = { sid: 0, at: Date.now(), data: res.data.first };
       routeStudents();
     }).catch(function(err) {
       if (err && err.message === 'LIFF_TIMEOUT') showFatal(failText('LIFF_TIMEOUT'));
@@ -1511,11 +1513,21 @@
   }
   function leaveNow(student) { return !!(student && student.leave && student.leave.now); }
 
+  // 空き枠を受け取る所。開くときに myBookings といっしょに届いた分（60秒以内・同じ生徒）は1回だけ使う
+  function loadSlots(sid) {
+    var f = state.firstSlots;
+    if (f && f.sid === sid && Date.now() - f.at <= 60000) {
+      state.firstSlots = null;
+      return Promise.resolve({ ok: true, data: { slots: f.data.slots, closedDates: f.data.closedDates } });
+    }
+    return callApi('availableSlots', { sid: sid });
+  }
+
   function selectStudentBySid(sid) {
     var raw = findStudent(sid);
     if (!raw) { showFatal(failText('STUDENT_NOT_FOUND')); return; }
     showLoading('予約枠を確認しています…');
-    callApi('availableSlots', { sid: sid }).then(function(res) {
+    loadSlots(sid).then(function(res) {
       if (!res || !res.ok) {
         showFatal(res ? failText(res.error) : failText('NET'));
         return;
