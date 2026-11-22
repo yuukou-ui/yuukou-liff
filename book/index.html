@@ -919,6 +919,26 @@
     try { var t = liff.getAccessToken(); if (t) state.token = t; } catch (e) {}
     return state.token;
   }
+  // うまくいかないときの案内（2026-11-22・アイデア案 2-3）：文は3つだけ。英語の記号は出さず、先生に伝える番号を付ける
+  var MSG_REOPEN = 'うまくいきませんでした。LINE をいったん閉じて、メニューからもう一度開いてください。', MSG_NET = '電波が届かなかったようです。電波の良い場所で、もう一度お試しください。', MSG_WAIT = '操作が続いたため、少しお休みしています。1分ほどおいて、もう一度お試しください。';
+  var FAIL_CODES = {
+    LIFF_NONE: 11, LIFF_TIMEOUT: 12, BOOT: 13, NET: 21,
+    TOKEN_INVALID: 31, TOKEN_EXPIRED: 32, NO_TOKEN: 33, TOKEN_WRONG_CHANNEL: 34, PROFILE_FAILED: 35, NO_USERID: 36,
+    RATE_LIMITED: 41,
+    SERVER_ERROR: 51, UNKNOWN_ACTION: 52, NO_BODY: 53, NOT_AUTHENTICATED: 54, NOT_LINKED: 55, STUDENT_NOT_FOUND: 56
+  };
+  function failText(kind) {
+    // kind：サーバーの error の文字、または 'NET'・'LIFF_NONE'・'LIFF_TIMEOUT'・'BOOT'
+    // 返す：文 ＋ '（番号 N）'
+    var key = (typeof kind === 'string') ? kind : '';
+    var code = Object.prototype.hasOwnProperty.call(FAIL_CODES, key) ? FAIL_CODES[key] : 99;
+    var msg = MSG_REOPEN;
+    if (code === 11 || code === 21) msg = MSG_NET;
+    else if (code === 41) msg = MSG_WAIT;
+    return msg + '（番号 ' + code + '）';
+  }
+  // 通行証が切れたら、だまって開き直す（60秒以内の2回目は開き直さない＝くり返しの歯止め）
+  var REOPEN_WRITE_ACTIONS = ['submitReschedule', 'submitAbsence', 'cancelReschedule', 'applyFreeBookings', 'selfRegister', 'askTeacher'];
   function callApi(action, extra) {
     var body = { action: action, accessToken: freshToken() };
     if (extra) { for (var k in extra) { body[k] = extra[k]; } }
@@ -926,7 +946,23 @@
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(body)
-    }).then(function(r){ return r.json(); });
+    }).then(function(r){ return r.json(); }).catch(function(){ throw new Error('NET'); }).then(function(res) {
+      if (!res || res.ok !== false) return res;
+      if (res.error !== 'TOKEN_INVALID' && res.error !== 'TOKEN_EXPIRED' && res.error !== 'NO_TOKEN') return res;
+      if (action === 'pushReceipt') return res;   // 控えの送り直しは裏の操作なので開き直さない
+      try {
+        var last = Number(sessionStorage.getItem('yk_reopen_at')) || 0;
+        var now = Date.now();
+        if (last && now - last < 60000) return res;
+        sessionStorage.setItem('yk_reopen_at', String(now));
+      } catch (e) { return res; }
+      if (REOPEN_WRITE_ACTIONS.indexOf(action) >= 0) {
+        uiAlert('画面を開いてから時間がたちました。開き直しますので、もう一度お選びください。').then(function() { location.reload(); });
+      } else {
+        location.reload();
+      }
+      return new Promise(function(){});
+    });
   }
 
   // ============================================================
@@ -1083,14 +1119,14 @@
   function boot() {
     setStatus('① 起動中…');
     if (typeof liff === 'undefined') {
-      showFatal('通信環境の問題でうまく開けませんでした。電波の良い場所でもう一度お試しください。');
+      showFatal(failText('LIFF_NONE'));
       return;
     }
     var _t0 = Date.now();
     dbg('init開始…');
     var _initTimeout = new Promise(function(_, reject) {
       setTimeout(function() {
-        reject(new Error('LIFF初期化が15秒で応答しません。LINEを完全に終了して開き直すか、Wi-Fi⇄モバイル回線を切替えてお試しください。'));
+        reject(new Error('LIFF_TIMEOUT'));
       }, 15000);
     });
     Promise.race([ liff.init({ liffId: LIFF_ID }), _initTimeout ]).then(function() {
@@ -1123,7 +1159,7 @@
     }).then(function(res) {
       if (!res) return; // login() でリダイレクト中
       dbg('応答: ' + JSON.stringify(res).slice(0, 120));
-      if (!res.ok) { showFatal('読み込みに失敗しました。通信環境の良い場所で、もう一度開いてみてください。（' + res.error + '）'); return; }
+      if (!res.ok) { showFatal(failText(res.error)); return; }
       if (!res.data.linked) {
         showRegister(state._linkMsg ? 'link' : '');
         return;
@@ -1131,7 +1167,9 @@
       state.students = res.data.students || [];
       routeStudents();
     }).catch(function(err) {
-      showFatal('うまく読み込めませんでした。LINEをいったん閉じて、もう一度開いてみてください。（' + (err && err.message ? err.message : String(err)) + '）');
+      if (err && err.message === 'LIFF_TIMEOUT') showFatal(failText('LIFF_TIMEOUT'));
+      else if (err && err.message === 'NET') showFatal(failText('NET'));
+      else showFatal(failText('BOOT'));
     });
   }
 
@@ -1188,16 +1226,16 @@
       done();
       if (!res.ok) {
         if (res.error === 'UNKNOWN_ACTION') { showFatal(SR_OLD_MSG); return; }
-        showError('srErr', '通信がうまくいきませんでした。電波の良い場所で、もう一度お試しください。');
+        showError('srErr', failText(res.error));
         return;
       }
       var d = res.data || {};
       if (d.success) { srDone(d.names || []); return; }
       if (d.canAsk) { srShowFail(!!d.locked); return; }
       showError('srErr', d.message || 'うまくいきませんでした。もう一度お試しください。');
-    }).catch(function() {
+    }).catch(function(err) {
       done();
-      showError('srErr', '通信がうまくいきませんでした。電波の良い場所で、もう一度お試しください。');
+      showError('srErr', failText(err && err.message));
     });
   }
 
@@ -1221,7 +1259,7 @@
       done();
       if (!res.ok) {
         if (res.error === 'UNKNOWN_ACTION') { showFatal(SR_OLD_MSG); return; }
-        showError('srAskErr', '通信がうまくいきませんでした。もう一度お試しください。');
+        showError('srAskErr', failText(res.error));
         return;
       }
       if (!res.data || !res.data.success) { showError('srAskErr', (res.data && res.data.message) || 'うまくいきませんでした。'); return; }
@@ -1231,9 +1269,9 @@
         try { liff.sendMessages([{ type: 'text', text: text }]).catch(function() {}); } catch (e) {}
       }
       showScreenById('screenRegAsked');
-    }).catch(function() {
+    }).catch(function(err) {
       done();
-      showError('srAskErr', '通信がうまくいきませんでした。もう一度お試しください。');
+      showError('srAskErr', failText(err && err.message));
     });
   }
 
@@ -1250,7 +1288,7 @@
       document.body.classList.remove('sr-mode');
       state.students = res.data.students || [];
       routeStudents();
-    }).catch(function() { showFatal('うまく読み込めませんでした。LINEをいったん閉じて、もう一度開いてみてください。'); });
+    }).catch(function(err) { showFatal(failText(err && err.message)); });
   }
   function srBackToMine() { document.body.classList.remove('sr-mode'); routeStudents(); }
   function srClose() { try { liff.closeWindow(); } catch (e) {} }
@@ -1475,11 +1513,11 @@
 
   function selectStudentBySid(sid) {
     var raw = findStudent(sid);
-    if (!raw) { showFatal('生徒情報が見つかりませんでした。'); return; }
+    if (!raw) { showFatal(failText('STUDENT_NOT_FOUND')); return; }
     showLoading('予約枠を確認しています…');
     callApi('availableSlots', { sid: sid }).then(function(res) {
       if (!res || !res.ok) {
-        showFatal('予約枠を読み込めませんでした。通信環境の良い場所で、もう一度開いてみてください。' + (res ? '（' + res.error + '）' : ''));
+        showFatal(res ? failText(res.error) : failText('NET'));
         return;
       }
       state.slots = (res.data && res.data.slots) || [];
@@ -1492,7 +1530,7 @@
         showHome(state.student);
       }
     }).catch(function(err) {
-      showFatal('うまく読み込めませんでした。LINEをいったん閉じて、もう一度開いてみてください。（' + (err && err.message ? err.message : String(err)) + '）');
+      showFatal(failText(err && err.message));
     });
   }
 
@@ -1501,7 +1539,7 @@
   // ============================================================
   function startBookingFlow(student) {
     if (!student || !student.name) {
-      showFatal('生徒情報の読み込みに失敗しました。画面を閉じてもう一度お試しください。');
+      showFatal(failText('STUDENT_NOT_FOUND'));
       return;
     }
     // フリー型は別フロー
@@ -1678,7 +1716,7 @@
   }
 
   function goToNewBooking() {
-    if (!state.student) { showFatal('生徒情報が見つかりませんでした。'); return; }
+    if (!state.student) { showFatal(failText('STUDENT_NOT_FOUND')); return; }
     state.pendingMode = false;
     startBookingFlow(state.student);
   }
@@ -1735,10 +1773,9 @@
       showLoading('キャンセルしています…');
       callApi('cancelReschedule', { sid: sid, absentDate: absentDate, selfReceipt: canSelfReceipt() }).then(function(res) {
         if (!res || !res.ok || !res.data || !res.data.success) {
-          var msg = (res && res.data && res.data.message) ? res.data.message
-            : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
           showHome(state.student);
-          uiAlert('キャンセルできませんでした' + msg);
+          if (res && res.data && res.data.message) uiAlert('キャンセルできませんでした' + res.data.message);
+          else uiAlert(failText(res && res.error ? res.error : 'NET'));
           return;
         }
         if (!res.data.pending) writeReceipt(res.data.receiptText); // お休みだけの取り消しは控えなし（登録時も送っていない）
@@ -1758,7 +1795,7 @@
         }).catch(fallback);
       }).catch(function(err) {
         showHome(state.student);
-        uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
+        uiAlert(failText(err && err.message));
       });
     });
   }
@@ -2045,7 +2082,7 @@
     callApi('applyFreeBookings', { sid: state.student.sid, bookings: payload, selfReceipt: canSelfReceipt() }).then(function(res) {
       if (!res || !res.ok) {
         btn.disabled = false; btn.textContent = prev;
-        showError('freeCalError', '送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認ください。'));
+        showError('freeCalError', failText(res ? res.error : 'NET'));
         return;
       }
       if (!res.data || !res.data.success) {
@@ -2080,7 +2117,7 @@
       showScreenById('screen4');
     }).catch(function(err) {
       btn.disabled = false; btn.textContent = prev;
-      showError('freeCalError', 'エラー：' + (err && err.message ? err.message : String(err)));
+      showError('freeCalError', failText(err && err.message));
     });
   }
 
@@ -2524,10 +2561,9 @@
       showLoading('登録しています…');
       callApi('submitAbsence', { sid: state.student.sid, absentDate: state.absentDate }).then(function(res) {
         if (!res || !res.ok || !res.data || !res.data.success) {
-          var msg = (res && res.data && res.data.message) ? res.data.message
-            : (res && res.error ? '（' + res.error + '）' : '。通信環境をご確認ください。');
           showCalendar();
-          uiAlert('登録できませんでした' + msg);
+          if (res && res.data && res.data.message) uiAlert('登録できませんでした' + res.data.message);
+          else uiAlert(failText(res && res.error ? res.error : 'NET'));
           return;
         }
         // ローカル更新
@@ -2556,7 +2592,7 @@
         showScreen(4);
       }).catch(function(err) {
         showCalendar();
-        uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
+        uiAlert(failText(err && err.message));
       });
     });
   }
@@ -2583,7 +2619,7 @@
     }).then(function(res) {
       if (!res || !res.ok) {
         btn.disabled = false; btn.textContent = 'この内容で確定する';
-        uiAlert('送信に失敗しました' + (res ? '（' + res.error + '）' : '。通信環境をご確認のうえ、もう一度お試しください。'));
+        uiAlert(failText(res ? res.error : 'NET'));
         return;
       }
       if (!res.data || !res.data.success) {
@@ -2627,7 +2663,7 @@
       btn.textContent = 'この内容で確定する';
     }).catch(function(err) {
       btn.disabled = false; btn.textContent = 'この内容で確定する';
-      uiAlert('エラー：' + (err && err.message ? err.message : String(err)));
+      uiAlert(failText(err && err.message));
     });
   }
 
