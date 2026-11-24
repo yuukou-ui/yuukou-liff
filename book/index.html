@@ -241,6 +241,17 @@
       0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
       40% { transform: translateY(-10px); opacity: 1; }
     }
+    /* 前に開いたときの内容を先に出しているあいだだけ、上のはしに流れる線（2026-11-24・案1） */
+    #freshBar { display: none; position: fixed; top: 0; left: 0; right: 0; height: 3px; overflow: hidden; z-index: 999; pointer-events: none; }
+    #freshBar.on { display: block; }
+    #freshBar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: #cbd5e1; animation: freshRun 1.2s ease-in-out infinite; }
+    @keyframes freshRun {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #freshBar::before { animation: none; width: 100%; opacity: 0.5; }
+    }
 
     /* 画面切り替え */
     .screen { display: none; }
@@ -869,6 +880,7 @@
   </div>
 
   <div id="dbg" class="dbg"></div>
+  <div id="freshBar" aria-hidden="true"></div>
 
 </div>
 
@@ -898,7 +910,11 @@
     freeCalViewMonth: null,
     calStep: 'absent', // 'absent' | 'makeup' | 'done'
     calViewMonth: null,
-    pendingMode: false // ホームの「振替先を選ぶ」から来た＝お休み日は固定・「あとで選ぶ」は出さない
+    pendingMode: false, // ホームの「振替先を選ぶ」から来た＝お休み日は固定・「あとで選ぶ」は出さない
+    uid: '',           // LINE の userId（前に開いたときの内容を覚える鍵。取れなければ ''＝覚えない）
+    stale: false,      // 前に開いたときの内容を先に出している間 true（サーバーの返事が届いたら false）
+    staleData: null,   // 先に出した中身 { students, first }
+    afterFresh: null   // 先に出している間に押された操作（届いてから1回だけ呼ぶ）
   };
 
   var DAY_NAMES = ['日','月','火','水','木','金','土'];
@@ -1021,7 +1037,7 @@
     var sec = function(ms) { return (ms / 1000).toFixed(1) + '秒'; };
     var all = Date.now() - HK.t0;
     el.style.color = '#333'; el.style.fontSize = '13px';
-    el.textContent = '計測：LINEの準備 ' + sec(HK.init) + '／サーバー ' + sec(HK.api) + '／そのほか ' + sec(Math.max(0, all - HK.init - HK.api)) + '／合計 ' + sec(all);
+    el.textContent = '計測：LINEの準備 ' + sec(HK.init) + '／サーバー ' + sec(HK.api) + '／そのほか ' + sec(Math.max(0, all - HK.init - HK.api)) + '／合計 ' + sec(all) + (HK.cache ? '／先に出た ' + sec(HK.cache) : '');
     try { sessionStorage.removeItem('yk_hakaru'); sessionStorage.removeItem('yk_hk0'); } catch (e) {}
   }
 
@@ -1158,8 +1174,11 @@
       setStatus('③ 通行証を取得中…');
       state.token = liff.getAccessToken();
       if (!state.token) throw new Error('アクセストークンが取得できませんでした');
+      state.uid = lineUserId();
       // --- 初回登録：登録リンクの token があれば先に紐付け ---
       var regToken = getRegToken();
+      // 前に開いたときの内容を先に出す（2026-11-24・案1）。登録リンクつきで開いたときは出さない
+      if (!regToken) homeCacheShow();
       var _pre = Promise.resolve(null);
       if (regToken) {
         setStatus('④ 登録を確認中…');
@@ -1182,6 +1201,7 @@
     }).then(function(res) {
       if (!res) return; // login() でリダイレクト中
       dbg('応答: ' + JSON.stringify(res).slice(0, 120));
+      if (state.stale) { freshArrived(res); hakaruShow(); return; }   // 先に出していた中身を入れかえる
       if (!res.ok) { showFatal(failText(res.error)); return; }
       if (!res.data.linked) {
         showRegister(state._linkMsg ? 'link' : '');
@@ -1193,9 +1213,146 @@
       routeStudents();
       hakaruShow();
     }).catch(function(err) {
+      if (state.stale) { state.stale = false; state.staleData = null; state.afterFresh = null; freshBar(false); }   // 覚えたものは消さない
       if (err && err.message === 'LIFF_TIMEOUT') showFatal(failText('LIFF_TIMEOUT'));
       else if (err && err.message === 'NET') showFatal(failText('NET'));
       else showFatal(failText('BOOT'));
+    });
+  }
+
+  // ============================================================
+  // 前に開いたときの内容を先に出す（2026-11-24・案1）。サーバーの返事を待たずにホームを出し、届いたら入れかえる。
+  // 覚えるのは端末の中（localStorage）だけ。LINE の userId が同じときだけ使う。通行証は入れない
+  // ============================================================
+  var HOME_CACHE_KEY = 'yk_home_v1';
+  var HOME_CACHE_DAYS = 60;   // 生徒が開くのは月1回くらいなので、短いと効かない
+
+  // LINE の userId（取れなければ ''＝覚えない・使わない）
+  function lineUserId() {
+    var id = '';
+    try { var ctx = liff.getContext ? liff.getContext() : null; if (ctx && ctx.userId) id = String(ctx.userId); } catch (e) {}
+    if (!id) { try { var tk = liff.getDecodedIDToken ? liff.getDecodedIDToken() : null; if (tk && tk.sub) id = String(tk.sub); } catch (e) {} }
+    return id;
+  }
+
+  // 覚える文字（JSON）を作る
+  function homeCacheMake(userId, students, first, now) {
+    return JSON.stringify({ v: 1, u: userId, at: now, students: students, first: first || null });
+  }
+
+  // 覚えた文字から { students, first } を取り出す。使えないときは null
+  function homeCachePick(raw, userId, now) {
+    if (!raw || !userId) return null;
+    var c = null;
+    try { c = JSON.parse(raw); } catch (e) { return null; }
+    if (!c || c.v !== 1 || c.u !== userId) return null;
+    if (typeof c.at !== 'number' || !isFinite(c.at)) return null;
+    if (now - c.at > HOME_CACHE_DAYS * 86400000 || c.at > now + 86400000) return null;   // 60日すぎ・時計が大きくずれた
+    var list = c.students;
+    if (!Array.isArray(list) || list.length === 0) return null;
+    if (list.length === 1 && !c.first) return null;   // 休会中の人など（空き枠を別に取りに行くので使わない）
+    for (var i = 0; i < list.length; i++) {
+      if (!list[i] || list[i].classType === 'free') return null;   // 昔のフリーの画面は先に出さない
+    }
+    return { students: list, first: list.length === 1 ? c.first : null };
+  }
+
+  // 中身が同じか
+  function homeSame(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+  }
+
+  function homeCacheSave() {
+    if (state.stale || !state.uid) return;
+    try {
+      var list = state.students || [];
+      if (!list.length) return;
+      if (list.length === 1 && list[0].leave && list[0].leave.now) { homeCacheDrop(); return; }   // 休会中の人は覚えない（空き枠がいっしょに届かず、入れかえで待たせるため）
+      var first =list.length === 1 ? { sid: 0, slots: state.slots, closedDates: state.closedDates, openMonths: state.openMonths } : null;
+      localStorage.setItem(HOME_CACHE_KEY, homeCacheMake(state.uid, list, first, Date.now()));
+    } catch (e) {}
+  }
+  function homeCacheDrop() {
+    try { localStorage.removeItem(HOME_CACHE_KEY); } catch (e) {}
+  }
+  function freshBar(on) {
+    var el = document.getElementById('freshBar');
+    if (el) el.classList.toggle('on', !!on);
+  }
+
+  // 起動のとき：覚えた内容があれば先に出す
+  function homeCacheShow() {
+    var got = null;
+    try { got = homeCachePick(localStorage.getItem(HOME_CACHE_KEY), state.uid, Date.now()); } catch (e) { got = null; }
+    if (!got) return;
+    try {
+      state.stale = true;
+      state.staleData = got;
+      state.students = got.students;
+      if (got.first) state.firstSlots = { sid: 0, at: Date.now(), data: got.first };
+      routeStudents();
+      freshBar(true);
+      HK.cache = Date.now() - HK.t0;
+    } catch (e) {
+      // 出せなかったら今まで通り待つ
+      state.stale = false; state.staleData = null; state.students = []; state.firstSlots = null;
+      freshBar(false);
+      showScreenById('screenLoading');
+    }
+  }
+
+  // 先に出しているあいだに押された操作は、新しい中身が届いてからにする
+  function whenFresh(fn) {
+    if (!state.stale) { fn(); return; }
+    state.afterFresh = fn;
+    showLoading('最新の内容を確認しています…');
+  }
+
+  // 新しい中身が届いたとき
+  function freshArrived(res) {
+    state.stale = false;
+    freshBar(false);
+    var act = state.afterFresh; state.afterFresh = null;
+    var curEl = document.querySelector('.screen.active');
+    var cur = curEl ? curEl.id : '';
+    var y = window.pageYOffset || 0;
+    var old = state.staleData || {}; state.staleData = null;
+    if (!res.ok) { showFatal(failText(res.error)); return; }
+    var data = res.data || {};
+    var list = data.students || [];
+    if (!data.linked || list.length === 0) {
+      homeCacheDrop();
+      state.students = []; state.firstSlots = null;
+      showRegister('');
+      return;
+    }
+    var sameStudents = homeSame(old.students, list);
+    var sameAll = sameStudents && homeSame(old.first || null, data.first || null);
+    state.students = list;
+    if (sameAll && !act) { homeCacheSave(); return; }   // 何も変わっていない：画面は動かさない
+    if (!sameStudents) act = null;   // 中身が変わったら押した操作は捨てる（相手がもう無いかもしれない）
+    // 入れかえの前と同じ画面なら、スクロールの位置を戻す（上へ飛ばさない）
+    var keep = function() {
+      if (act) return;
+      var nowEl = document.querySelector('.screen.active');
+      if (nowEl && nowEl.id === cur) window.scrollTo(0, y);
+    };
+    if (list.length > 1) {
+      state.mode = 'siblings';
+      renderSiblingList(list);
+      showScreenById('screenSibling');
+      homeCacheSave();
+      if (act) act(); else keep();
+      return;
+    }
+    state.mode = 'single';
+    state.firstSlots = data.first ? { sid: 0, at: Date.now(), data: data.first } : null;
+    selectStudentBySid(list[0].sid, function() {
+      // いつもの行き先を出してから、押された操作をする（取り消しの確認で「やめる」を押したとき、元の画面に戻れるように）
+      if (cur === 'screenMyCal' || mcIsWanted()) showMyCalendar();
+      else if (state.student.classType === 'free' && !leaveNow(state.student)) startBookingFlow(state.student);
+      else showHome(state.student);
+      if (act) act(); else keep();
     });
   }
 
@@ -1208,6 +1365,7 @@
   var sr = { day: '', mode: '', busy: false };
 
   function showRegister(mode) {
+    if (state.stale && mode === 'sibling') { whenFresh(function() { showRegister(mode); }); return; }
     sr.mode = mode || '';
     document.body.classList.add('sr-mode');
     var sib = sr.mode === 'sibling';
@@ -1460,6 +1618,7 @@
   }
 
   function mcNewBooking() {
+    if (state.stale) { whenFresh(function() { mcNewBooking(); }); return; }
     document.body.classList.remove('mc-mode');
     state.pendingMode = false;
     startBookingFlow(state.student);
@@ -1486,6 +1645,7 @@
       state.mode = 'siblings';
       renderSiblingList(state.students);
       showScreenById('screenSibling');
+      homeCacheSave();
     }
   }
 
@@ -1549,7 +1709,8 @@
     return callApi('availableSlots', { sid: sid });
   }
 
-  function selectStudentBySid(sid) {
+  // after があれば、空き枠と生徒を入れたあと、いつもの行き先の代わりに after() を呼ぶ（新しい中身が届いたとき・2026-11-24）
+  function selectStudentBySid(sid, after) {
     var raw = findStudent(sid);
     if (!raw) { showFatal(failText('STUDENT_NOT_FOUND')); return; }
     showLoading('予約枠を確認しています…');
@@ -1562,6 +1723,8 @@
       state.closedDates = (res.data && res.data.closedDates) || [];
       state.openMonths = (res.data && res.data.openMonths) || null;
       state.student = enrichStudent(raw);
+      homeCacheSave();
+      if (after) { after(); return; }
       if (mcIsWanted()) { showMyCalendar(); return; }   // メニューの「お稽古カレンダー」から開いた（?view=cal）
       if (state.student.classType === 'free' && !leaveNow(state.student)) {
         startBookingFlow(state.student);
@@ -1755,6 +1918,7 @@
   }
 
   function goToNewBooking() {
+    if (state.stale) { whenFresh(function() { goToNewBooking(); }); return; }
     if (!state.student) { showFatal(failText('STUDENT_NOT_FOUND')); return; }
     state.pendingMode = false;
     startBookingFlow(state.student);
@@ -1762,6 +1926,7 @@
 
   // ホームの「振替先を選ぶ」：お休み日を固定して振替先の選択から始める
   function pickMakeupFor(absentDate) {
+    if (state.stale) { whenFresh(function() { pickMakeupFor(absentDate); }); return; }
     if (!state.student) return;
     state.pendingMode = true;
     state.absentDate = absentDate;
@@ -1802,6 +1967,7 @@
   }
 
   function cancelBooking(absentDate, isPending) {
+    if (state.stale) { whenFresh(function() { cancelBooking(absentDate, isPending); }); return; }
     if (!state.student) return;
     var msg = isPending
       ? formatDateLabel(absentDate) + ' のお休みの登録を取り消します。よろしいですか？\n（お休みしない場合や、登録を間違えた場合に）'
@@ -1853,7 +2019,10 @@
         : ((s.regularDay ? s.regularDay + '曜 ' : '') + (s.regularTime || ''));
       btn.innerHTML = '<div>' + s.name +
         '<div class="sibling-info">' + info + '</div></div>';
-      btn.onclick = (function(sid) { return function() { selectStudentBySid(sid); }; })(s.sid);
+      btn.onclick = (function(sid) { return function() {
+        if (state.stale) { whenFresh(function() { selectStudentBySid(sid); }); return; }
+        selectStudentBySid(sid);
+      }; })(s.sid);
       container.appendChild(btn);
     });
   }
@@ -2138,6 +2307,7 @@
           return { absentDate:'', absentTime:'', newDate:b.date, newTime:b.time, bookingType:'free' };
         });
       }
+      homeCacheSave();   // 次に開いたとき先に出す内容も新しくする
       var sorted = payload.slice().sort(function(a, b) { return a.date.localeCompare(b.date); });
       var lines = sorted.map(function(b) {
         var parts = b.date.split('/');
@@ -2621,6 +2791,7 @@
           raw.bookings.push({ absentDate: state.absentDate, absentTime: state.student.regularTime,
             newDate: '', newTime: '', bookingType: 'makeup', pending: true, deadline: res.data.deadline || dl });
         }
+        homeCacheSave();   // 次に開いたとき先に出す内容も新しくする
         // 完了画面（期限と、過ぎたらどうなるかを必ず添える）
         dl = res.data.deadline || dl;
         var left = daysLeft(dl);
@@ -2691,6 +2862,7 @@
           });
         }
       }
+      homeCacheSave();   // 次に開いたとき先に出す内容も新しくする
       state.student.pendingAbsences = (state.student.pendingAbsences || []).filter(function(d) { return d !== state.absentDate; });
       state.pendingMode = false;
       document.getElementById('successDetail').innerHTML =
