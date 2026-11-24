@@ -1037,7 +1037,18 @@
     var sec = function(ms) { return (ms / 1000).toFixed(1) + '秒'; };
     var all = Date.now() - HK.t0;
     el.style.color = '#333'; el.style.fontSize = '13px';
-    el.textContent = '計測：LINEの準備 ' + sec(HK.init) + '／サーバー ' + sec(HK.api) + '／そのほか ' + sec(Math.max(0, all - HK.init - HK.api)) + '／合計 ' + sec(all) + (HK.cache ? '／先に出た ' + sec(HK.cache) : '');
+    var txt = '計測：LINEの準備 ' + sec(HK.init) + '／サーバー ' + sec(HK.api) + '／そのほか ' + sec(Math.max(0, all - HK.init - HK.api)) + '／合計 ' + sec(all) + (HK.cache ? '／先に出た ' + sec(HK.cache) : '');
+    // サーバーの中の区切り（2026-11-24 案2）：前の区切りからの差。verify＋throttle＝確かめ
+    if (HK.hk && HK.hk.length) {
+      var at = {}; for (var i = 0; i < HK.hk.length; i++) at[HK.hk[i][0]] = Number(HK.hk[i][1]) || 0;
+      var prev = 0, parts = [];
+      var step = function(label, key) { if (!(key in at)) return; parts.push(label + ' ' + ((at[key] - prev) / 1000).toFixed(1)); prev = at[key]; };
+      step('確かめ', 'throttle'); step('名簿', 'who'); step('休会', 'leave'); step('予約', 'bookings'); step('空き枠', 'slots');
+      if ('end' in at) parts.push('合計 ' + (at.end / 1000).toFixed(1));
+      txt += '\nサーバーの中：' + parts.join('／');
+      el.style.whiteSpace = 'pre-line';
+    }
+    el.textContent = txt;
     try { sessionStorage.removeItem('yk_hakaru'); sessionStorage.removeItem('yk_hk0'); } catch (e) {}
   }
 
@@ -1192,9 +1203,10 @@
       return _pre.then(function(){
         setStatus((regToken ? '⑤' : '④') + ' 生徒情報を確認中…');
         var _tApi = Date.now();
-        return callApi('myBookings', { withSlots: true }).then(function(res) {
+        return callApi('myBookings', HAKARU ? { withSlots: true, hakaru: true } : { withSlots: true }).then(function(res) {
           dbg('API応答 ' + ((Date.now() - _tApi) / 1000).toFixed(1) + 's: ' + JSON.stringify(res).slice(0, 80));
           HK.api = Date.now() - _tApi;
+          if (res && Array.isArray(res.hk)) HK.hk = res.hk;
           return res;
         });
       });
