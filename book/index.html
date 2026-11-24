@@ -1004,6 +1004,26 @@
   function setStatus(s){ var el = document.getElementById('loadingText'); if (el) el.textContent = s; }
   var DEBUG = false; // 本番は false（画面下の診断JSON行を非表示）。調査時だけ true に。
   function dbg(s){ if (!DEBUG) return; var el = document.getElementById('dbg'); if (el) el.textContent = s; }
+  // 開くまでの時間を測る（2026-11-24）。アドレスに hakaru=1 を付けて開いたときだけ、画面の下に秒数を出す。ふつうに開いた人には何も出ない
+  var HAKARU = false, HK = { t0: Date.now(), init: 0, api: 0 };
+  try {
+    HAKARU = decodeURIComponent(location.href).indexOf('hakaru=1') >= 0;
+    if (HAKARU) sessionStorage.setItem('yk_hakaru', '1'); else HAKARU = sessionStorage.getItem('yk_hakaru') === '1';
+    if (HAKARU) {
+      var _hk0 = Number(sessionStorage.getItem('yk_hk0')) || 0;
+      if (!_hk0) { _hk0 = (window.performance && performance.timing && performance.timing.navigationStart) || Date.now(); sessionStorage.setItem('yk_hk0', String(_hk0)); }
+      HK.t0 = _hk0;
+    }
+  } catch (e) {}
+  function hakaruShow() {
+    if (!HAKARU) return;
+    var el = document.getElementById('dbg'); if (!el) return;
+    var sec = function(ms) { return (ms / 1000).toFixed(1) + '秒'; };
+    var all = Date.now() - HK.t0;
+    el.style.color = '#333'; el.style.fontSize = '13px';
+    el.textContent = '計測：LINEの準備 ' + sec(HK.init) + '／サーバー ' + sec(HK.api) + '／そのほか ' + sec(Math.max(0, all - HK.init - HK.api)) + '／合計 ' + sec(all);
+    try { sessionStorage.removeItem('yk_hakaru'); sessionStorage.removeItem('yk_hk0'); } catch (e) {}
+  }
 
   // ============================================================
   // 画面切り替え
@@ -1132,6 +1152,7 @@
     });
     Promise.race([ liff.init({ liffId: LIFF_ID }), _initTimeout ]).then(function() {
       dbg('init完了 ' + ((Date.now() - _t0) / 1000).toFixed(1) + 's');
+      HK.init = Date.now() - _t0;
       setStatus('② ログイン確認中…');
       if (!liff.isLoggedIn()) { dbg('未ログイン→login()'); liff.login(); return null; }
       setStatus('③ 通行証を取得中…');
@@ -1154,6 +1175,7 @@
         var _tApi = Date.now();
         return callApi('myBookings', { withSlots: true }).then(function(res) {
           dbg('API応答 ' + ((Date.now() - _tApi) / 1000).toFixed(1) + 's: ' + JSON.stringify(res).slice(0, 80));
+          HK.api = Date.now() - _tApi;
           return res;
         });
       });
@@ -1169,6 +1191,7 @@
       // 生徒が1人なら、空き枠もいっしょに届く（開くときの通信を1回に・2026-11-22）
       if (res.data.first) state.firstSlots = { sid: 0, at: Date.now(), data: res.data.first };
       routeStudents();
+      hakaruShow();
     }).catch(function(err) {
       if (err && err.message === 'LIFF_TIMEOUT') showFatal(failText('LIFF_TIMEOUT'));
       else if (err && err.message === 'NET') showFatal(failText('NET'));
