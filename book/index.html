@@ -892,6 +892,7 @@
     newDate: '', newTime: '', newDateDisplay: '',
     slots: [],
     closedDates: [],   // 休講日（今日〜翌々月末）。自分の曜日の休講日を「休講」と表示する
+    openMonths: null,  // 公開済みの月（'yyyy/MM'）。null＝しぼらない（古いサーバー・まだ1度も公開していない）
     freeBookings: [],
     freeSelectedDate: null,
     freeCalViewMonth: null,
@@ -1511,6 +1512,8 @@
     var l = state.student && state.student.leave;
     return !!(l && ymOf(dateStr) >= l.from && (!l.to || ymOf(dateStr) < l.to));
   }
+  // 公開済みの月か（2026-11-24）。openMonths が無ければ全部 true
+  function monthOpen(dateStr) { return !state.openMonths || state.openMonths.indexOf(ymOf(dateStr)) >= 0; }
   function leaveNow(student) { return !!(student && student.leave && student.leave.now); }
 
   // 空き枠を受け取る所。開くときに myBookings といっしょに届いた分（60秒以内・同じ生徒）は1回だけ使う
@@ -1518,7 +1521,7 @@
     var f = state.firstSlots;
     if (f && f.sid === sid && Date.now() - f.at <= 60000) {
       state.firstSlots = null;
-      return Promise.resolve({ ok: true, data: { slots: f.data.slots, closedDates: f.data.closedDates } });
+      return Promise.resolve({ ok: true, data: { slots: f.data.slots, closedDates: f.data.closedDates, openMonths: f.data.openMonths } });
     }
     return callApi('availableSlots', { sid: sid });
   }
@@ -1534,6 +1537,7 @@
       }
       state.slots = (res.data && res.data.slots) || [];
       state.closedDates = (res.data && res.data.closedDates) || [];
+      state.openMonths = (res.data && res.data.openMonths) || null;
       state.student = enrichStudent(raw);
       if (mcIsWanted()) { showMyCalendar(); return; }   // メニューの「お稽古カレンダー」から開いた（?view=cal）
       if (state.student.classType === 'free' && !leaveNow(state.student)) {
@@ -2208,6 +2212,12 @@
     if (inLeaveMonth(dateStr)) {
       cell.classList.add('beyond');
       cell.onclick = function() { showError('calError', jpYm(ymOf(dateStr)) + 'は休会の月のため、この日は選べません。'); };
+      return cell;
+    }
+    // 公開していない月の日は、お休みに選べない（2026-11-24）
+    if (state.calStep === 'absent' && !monthOpen(dateStr)) {
+      cell.classList.add('beyond');
+      cell.onclick = function() { showError('calError', jpYm(ymOf(dateStr)) + 'の開講日は、まだ決まっていません。'); };
       return cell;
     }
 
