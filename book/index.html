@@ -911,6 +911,7 @@
     calStep: 'absent', // 'absent' | 'makeup' | 'done'
     calViewMonth: null,
     pendingMode: false, // ホームの「振替先を選ぶ」から来た＝お休み日は固定・「あとで選ぶ」は出さない
+    changeMode: null,   // ホームの「日時を変える」から来た＝{ absentDate, oldDate, oldTime }（2026-11-26・案 2-4）。それ以外は null
     uid: '',           // LINE の userId（前に開いたときの内容を覚える鍵。取れなければ ''＝覚えない）
     stale: false,      // 前に開いたときの内容を先に出している間 true（サーバーの返事が届いたら false）
     staleData: null,   // 先に出した中身 { students, first }
@@ -955,7 +956,7 @@
     return msg + '（番号 ' + code + '）';
   }
   // 通行証が切れたら、だまって開き直す（60秒以内の2回目は開き直さない＝くり返しの歯止め）
-  var REOPEN_WRITE_ACTIONS = ['submitReschedule', 'submitAbsence', 'cancelReschedule', 'applyFreeBookings', 'selfRegister', 'askTeacher'];
+  var REOPEN_WRITE_ACTIONS = ['submitReschedule', 'submitAbsence', 'cancelReschedule', 'changeReschedule', 'applyFreeBookings', 'selfRegister', 'askTeacher'];
   function callApi(action, extra) {
     var body = { action: action, accessToken: freshToken() };
     if (extra) { for (var k in extra) { body[k] = extra[k]; } }
@@ -1633,6 +1634,7 @@
     if (state.stale) { whenFresh(function() { mcNewBooking(); }); return; }
     document.body.classList.remove('mc-mode');
     state.pendingMode = false;
+    state.changeMode = null;
     startBookingFlow(state.student);
   }
   function mcToHome() {
@@ -1880,6 +1882,20 @@
         btn.onclick = (function(ad) { return function() { cancelBooking(ad); }; })(b.absentDate);
         row.appendChild(info);
         if (canCancelMakeup(b.newDate, b.newTime)) row.appendChild(btn);   // 振替先のお稽古が始まったあとは出さない（サーバーも断る）
+        // 「日時を変える」（2026-11-26・案 2-4）：キャンセルが出る振替（種別 makeup）だけ。「キャンセル」と同じ並びの左
+        if (btn.parentNode === row && b.bookingType === 'makeup' && !leaveNow(student)) {
+          var acts = document.createElement('div');
+          acts.className = 'home-pending-actions';
+          var chg = document.createElement('button');
+          chg.className = 'home-cancel-btn btn-later';
+          chg.textContent = '日時を変える';
+          chg.onclick = (function(bk) { return function() { changeMakeupFor(bk.absentDate, bk.newDate, bk.newTime); }; })(b);
+          row.style.flexWrap = 'wrap';
+          info.style.flex = '1 1 100%';
+          acts.appendChild(chg);
+          acts.appendChild(btn);
+          row.appendChild(acts);
+        }
         container.appendChild(row);
       });
     }
@@ -1933,6 +1949,7 @@
     if (state.stale) { whenFresh(function() { goToNewBooking(); }); return; }
     if (!state.student) { showFatal(failText('STUDENT_NOT_FOUND')); return; }
     state.pendingMode = false;
+    state.changeMode = null;
     startBookingFlow(state.student);
   }
 
@@ -1958,8 +1975,16 @@
     renderCalendar();
     showCalendar();
   }
+  // ホームの「日時を変える」（2026-11-26・案 2-4）：「振替先を選ぶ」と同じ入り方。今の席は、新しい振替先が確定するまで手放さない
+  function changeMakeupFor(absentDate, oldDate, oldTime) {
+    if (state.stale) { whenFresh(function() { changeMakeupFor(absentDate, oldDate, oldTime); }); return; }
+    if (!state.student) return;
+    state.changeMode = { absentDate: absentDate, oldDate: oldDate, oldTime: oldTime };
+    pickMakeupFor(absentDate);
+  }
   function backToHome() {
     state.pendingMode = false;
+    state.changeMode = null;
     if (state.student) showHome(state.student);
   }
   // お休みの登録を取り消せるのは、その日がまだ来ていないとき（当日はお稽古開始前まで）。
@@ -2430,9 +2455,11 @@
     var isMyDay = (dow === myDow);
     var isRescheduled = rescheduled.indexOf(dateStr) >= 0;
     var daySlots = state.slots.filter(function(s) { return s.date === dateStr; });
+    var bookedAll = booked;   // 古い予約と同じ日時そのものは、日時を変えるときも選べないまま
+    if (state.changeMode) booked = slotsWithout(booked, state.changeMode.oldDate, state.changeMode.oldTime);   // 重なりは、変えようとしている古い予約を無いものとして見る
     var openSlots = daySlots.filter(function(s) {
       var k = s.date + '_' + s.time;
-      return booked.indexOf(k) < 0 && s.remaining > 0 && !ownBookedHit(booked, state.student.regularTime, s.date, s.time);
+      return bookedAll.indexOf(k) < 0 && s.remaining > 0 && !ownBookedHit(booked, state.student.regularTime, s.date, s.time);
     });
 
     var startHour = shortStartHour(state.student.regularTime);
@@ -2572,6 +2599,12 @@
     });
   }
 
+  // 日時を変えるとき（2026-11-26・案 2-4）、変えようとしている古い予約（oldDate の oldTime）を外した予約の一覧。元の一覧は変えない
+  function slotsWithout(bookedSlots, oldDate, oldTime) {
+    var key = oldDate + '_' + oldTime;
+    return (bookedSlots || []).filter(function(k) { return String(k) !== key; });
+  }
+
   // "17:00-18:00" → "17時"、"15:40-16:20" → "15:40"（途中の時刻からの振替・途中から始まるクラスは、分まで出す。2026-11-12）
   function shortStartHour(timeStr) {
     return mcStartLabel(timeStr);
@@ -2671,7 +2704,8 @@
   }
 
   function renderTimeSlots(dateStr) {
-    var booked = state.student.bookedSlots || [];
+    var bookedAll = state.student.bookedSlots || [];
+    var booked = state.changeMode ? slotsWithout(bookedAll, state.changeMode.oldDate, state.changeMode.oldTime) : bookedAll;   // 日時を変えるとき、重なりは古い予約を無いものとして見る
     var isAbsentDay = (dateStr === state.absentDate);
     var parts = dateStr.split('/');
     var dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -2679,7 +2713,7 @@
     var slots = state.slots.filter(function(s) {
       if (s.date !== dateStr) return false;
       var k = s.date + '_' + s.time;
-      if (booked.indexOf(k) >= 0 || s.remaining <= 0) return false;
+      if (bookedAll.indexOf(k) >= 0 || s.remaining <= 0) return false;
       if (ownBookedHit(booked, state.student.regularTime, s.date, s.time)) return false;   // 自分のほかの予約と重なる（続けて受けるのはよい）
       if (isMyRegularDay && ownTimeHit(state.student.regularTime, s.time, isAbsentDay)) return false;
       return true;
@@ -2750,7 +2784,7 @@
       btn.disabled = true;
       btn.textContent = '時間枠を選んでください';
     } else {
-      makEl.textContent = '未選択';
+      makEl.textContent = state.changeMode ? '今：' + formatDateLabel(state.changeMode.oldDate) + ' ' + myTime(state.changeMode.oldTime) : '未選択';
       makEl.classList.add('empty');
       makIcon.className = 'cal-summary-icon empty';
       btn.disabled = true;
@@ -2773,7 +2807,19 @@
     document.getElementById('cfName').textContent = state.student.name;
     document.getElementById('cfAbsent').textContent = state.absentDateDisplay;
     document.getElementById('cfNew').textContent = state.newDateDisplay;
+    if (state.changeMode) {   // 日時を変えるとき、前の振替先を小さく1行
+      var was = document.createElement('span');
+      was.className = 'slot-remaining';
+      was.textContent = '前：' + formatDateLabel(state.changeMode.oldDate) + ' ' + myTime(state.changeMode.oldTime);
+      document.getElementById('cfNew').appendChild(was);
+    }
+    var sb = document.getElementById('submitBtn');
+    if (!sb.disabled) sb.textContent = submitLabel();
     showScreen(3);
+  }
+  // 確定のボタンの文字（日時を変えるときだけ「この内容で変更する」）
+  function submitLabel() {
+    return state.changeMode ? 'この内容で変更する' : 'この内容で確定する';
   }
 
   // ============================================================
@@ -2837,31 +2883,47 @@
     if (btn.disabled) return;
     btn.disabled = true;
     btn.textContent = '処理中...';
+    var chg = state.changeMode;   // 日時を変える（2026-11-26・案 2-4）
 
-    callApi('submitReschedule', {
+    (chg ? callApi('changeReschedule', {
+      sid: state.student.sid,
+      absentDate: chg.absentDate,
+      newDate: state.newDate,
+      newTime: state.newTime,
+      selfReceipt: canSelfReceipt()
+    }) : callApi('submitReschedule', {
       sid: state.student.sid,
       absentDate: state.absentDate,
       newDate: state.newDate,
       newTime: state.newTime,
       selfReceipt: canSelfReceipt()
-    }).then(function(res) {
+    })).then(function(res) {
       if (!res || !res.ok) {
-        btn.disabled = false; btn.textContent = 'この内容で確定する';
+        btn.disabled = false; btn.textContent = submitLabel();
         uiAlert(failText(res ? res.error : 'NET'));
         return;
       }
       if (!res.data || !res.data.success) {
-        btn.disabled = false; btn.textContent = 'この内容で確定する';
-        uiAlert((res.data && res.data.message) ? res.data.message : '予約できませんでした。最初からやり直してください。');
+        btn.disabled = false; btn.textContent = submitLabel();
+        if (chg) uiAlert((res.data && res.data.message) ? res.data.message : failText(res.error));
+        else uiAlert((res.data && res.data.message) ? res.data.message : '予約できませんでした。最初からやり直してください。');
         return;
       }
       // 成功：控えをトークに書く（失敗時は push に戻す・画面は待たない）
       writeReceipt(res.data.receiptText);
       // ローカル状態を更新（再表示時の整合）
-      state.student.rescheduledDates.push(state.absentDate);
-      state.student.bookedSlots.push(state.newDate + '_' + state.newTime);
       var raw = findStudent(state.student.sid);
-      if (raw) {
+      if (chg) {
+        // 日時を変えた：同じお休みの行の振替先だけを入れかえる（行は増えない）
+        state.student.bookedSlots = slotsWithout(state.student.bookedSlots, chg.oldDate, chg.oldTime);
+        state.student.bookedSlots.push(state.newDate + '_' + state.newTime);
+        var cur = raw ? (raw.bookings || []).filter(function(b) { return b.bookingType !== 'free' && b.absentDate === chg.absentDate && !b.pending; })[0] : null;
+        if (cur) { cur.newDate = state.newDate; cur.newTime = state.newTime; }
+      } else {
+        state.student.rescheduledDates.push(state.absentDate);
+        state.student.bookedSlots.push(state.newDate + '_' + state.newTime);
+      }
+      if (raw && !chg) {
         raw.bookings = raw.bookings || [];
         var existing = raw.bookings.filter(function(b) { return b.bookingType !== 'free' && b.absentDate === state.absentDate && b.pending; })[0];
         if (existing) {
@@ -2877,21 +2939,22 @@
       homeCacheSave();   // 次に開いたとき先に出す内容も新しくする
       state.student.pendingAbsences = (state.student.pendingAbsences || []).filter(function(d) { return d !== state.absentDate; });
       state.pendingMode = false;
+      state.changeMode = null;
       document.getElementById('successDetail').innerHTML =
         '<div class="confirm-row"><span class="confirm-label">お名前</span><span class="confirm-value">' + state.student.name + '</span></div>' +
         '<div class="confirm-row"><span class="confirm-label">お休み</span><span class="confirm-value">' + state.absentDateDisplay + '</span></div>' +
         '<div class="confirm-row"><span class="confirm-label">振替先</span><span class="confirm-value">' + state.newDateDisplay + '</span></div>';
       // 完了画面を振替用の表示に戻す（フリー流用で書き換わっている場合の保険）
       var sm = document.querySelector('#screen4 .success-msg');
-      if (sm) sm.textContent = '振替予約が完了しました';
+      if (sm) sm.textContent = chg ? '振替先を変更しました' : '振替予約が完了しました';
       var rb = document.querySelector('#screen4 .btn-secondary');
       if (rb) { rb.style.display = ''; rb.textContent = 'もう一件予約する'; }
       document.getElementById('successDetail').style.whiteSpace = '';
       showScreen(4);
       btn.disabled = false;
-      btn.textContent = 'この内容で確定する';
+      btn.textContent = submitLabel();
     }).catch(function(err) {
-      btn.disabled = false; btn.textContent = 'この内容で確定する';
+      btn.disabled = false; btn.textContent = submitLabel();
       uiAlert(failText(err && err.message));
     });
   }
@@ -2903,9 +2966,10 @@
     state.absentDate = state.absentDateDisplay = '';
     state.newDate = state.newTime = state.newDateDisplay = '';
     state.calStep = 'absent';
+    state.changeMode = null;
     hideError('calError');
     document.getElementById('submitBtn').disabled = false;
-    document.getElementById('submitBtn').textContent = 'この内容で確定する';
+    document.getElementById('submitBtn').textContent = submitLabel();
 
     if (state.mode === 'siblings' && state.students.length > 1) {
       renderSiblingList(state.students);
